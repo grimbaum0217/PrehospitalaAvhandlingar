@@ -8,6 +8,7 @@ class Category(Base):
 
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
+    narrative_text = Column(Text)
 
     subcategories = relationship("Subcategory", back_populates="category")
 
@@ -18,6 +19,7 @@ class Subcategory(Base):
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     category_id = Column(String, ForeignKey("categories.id"))
+    narrative_text = Column(Text)
 
     category = relationship("Category", back_populates="subcategories")
     theses = relationship("Thesis", back_populates="subcategory")

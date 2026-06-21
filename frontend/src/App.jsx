@@ -69,6 +69,7 @@ function App() {
   const path = useRoute();
   const detailMatch = path.match(/^\/theses\/(\d+)$/);
   const filteredMatch = path.match(/^\/(year|university|profession|category)\/(.+)$/);
+  const researchAreaMatch = path.match(/^\/research-areas\/([A-I])$/);
 
   return (
     <div className="app-shell">
@@ -86,12 +87,20 @@ function App() {
           >
             Theses
           </button>
+          <button
+            className={path.startsWith("/research-areas") ? "active" : ""}
+            onClick={() => navigate("/research-areas")}
+          >
+            Forskningsområden
+          </button>
         </nav>
       </header>
 
       <main>
         {path === "/" && <HomePage />}
         {path === "/theses" && <ThesesPage />}
+        {path === "/research-areas" && <ResearchAreasPage />}
+        {researchAreaMatch && <ResearchAreasPage categoryId={researchAreaMatch[1]} />}
         {detailMatch && <ThesisDetail runningNumber={detailMatch[1]} />}
         {filteredMatch && (
           <FilteredThesesPage
@@ -361,6 +370,147 @@ function ThesisList({ theses }) {
   );
 }
 
+function ResearchAreasPage({ categoryId }) {
+  const endpoint = categoryId ? `/research-areas/${categoryId}` : "/research-areas";
+  const { data, loading, error } = useApi(endpoint);
+  const areas = categoryId && data ? [data] : data ?? [];
+
+  useEffect(() => {
+    if (!data || !window.location.hash) return;
+    const element = document.querySelector(window.location.hash);
+    if (element) element.scrollIntoView({ block: "start" });
+  }, [data]);
+
+  return (
+    <section className="page-section research-page">
+      {categoryId && (
+        <button className="back-button" onClick={() => navigate("/research-areas")}>
+          Alla forskningsområden
+        </button>
+      )}
+
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Rapportens tematisering</p>
+          <h1>Forskningsområden</h1>
+        </div>
+        {areas.length > 0 && <span className="result-count">{areas.length} områden</span>}
+      </div>
+
+      {loading && <Status message="Loading research areas..." />}
+      {error && <Status message="Could not load research areas." />}
+      {!loading && !error && (
+        <div className="research-area-list">
+          {areas.map((area) => (
+            <ResearchAreaSection key={area.id} area={area} singleCategory={Boolean(categoryId)} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ResearchAreaSection({ area, singleCategory }) {
+  return (
+    <article className="research-area" id={`category-${area.id}`}>
+      <div className="research-area-heading">
+        <div>
+          <p className="eyebrow">Huvudkategori {area.id}</p>
+          <h2>{area.name}</h2>
+        </div>
+        {!singleCategory && (
+          <button className="text-link-button" onClick={() => navigate(`/research-areas/${area.id}`)}>
+            Visa området
+          </button>
+        )}
+      </div>
+
+      {area.narrative_text && <NarrativeText text={area.narrative_text} />}
+
+      {area.subcategories.length > 0 && (
+        <div className="subcategory-list">
+          {area.subcategories.map((subcategory) => (
+            <SubcategoryCard key={subcategory.id} subcategory={subcategory} />
+          ))}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function SubcategoryCard({ subcategory }) {
+  const [tab, setTab] = useState("overview");
+
+  return (
+    <article className="subcategory-card" id={`subcategory-${subcategory.id}`}>
+      <div className="subcategory-heading">
+        <div>
+          <p className="eyebrow">Subkategori {subcategory.id}</p>
+          <h3>{subcategory.name}</h3>
+        </div>
+      </div>
+
+      <div className="tab-list" role="tablist" aria-label={`${subcategory.id} sections`}>
+        <button
+          className={tab === "overview" ? "active" : ""}
+          onClick={() => setTab("overview")}
+          type="button"
+        >
+          Översikt
+        </button>
+        <button
+          className={tab === "theses" ? "active" : ""}
+          onClick={() => setTab("theses")}
+          type="button"
+        >
+          Avhandlingar
+        </button>
+        <button
+          className={tab === "publications" ? "active" : ""}
+          onClick={() => setTab("publications")}
+          type="button"
+        >
+          Publikationer
+        </button>
+      </div>
+
+      {tab === "overview" && (
+        <div className="tab-panel">
+          {subcategory.narrative_text ? (
+            <NarrativeText text={subcategory.narrative_text} />
+          ) : (
+            <Status message="Ingen narrativ text importerad för denna subkategori." />
+          )}
+        </div>
+      )}
+      {tab === "theses" && (
+        <div className="tab-panel">
+          {subcategory.theses.length > 0 ? (
+            <ThesisList theses={subcategory.theses} />
+          ) : (
+            <Status message="Inga avhandlingar är kopplade till denna subkategori." />
+          )}
+        </div>
+      )}
+      {tab === "publications" && (
+        <div className="tab-panel">
+          <p className="placeholder-text">Publikationer läggs till i en senare version.</p>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function NarrativeText({ text }) {
+  return (
+    <div className="narrative-text">
+      {text.split("\n\n").map((paragraph, index) => (
+        <p key={`${paragraph.slice(0, 24)}-${index}`}>{paragraph}</p>
+      ))}
+    </div>
+  );
+}
+
 function ThesisDetail({ runningNumber }) {
   const { data: thesis, loading, error } = useApi(`/theses/${runningNumber}`);
   const { data: categories } = useApi("/categories");
@@ -399,11 +549,37 @@ function ThesisDetail({ runningNumber }) {
             </div>
             <div>
               <dt>Category</dt>
-              <dd>{categoryNames[thesis.category_id] || thesis.category_id || "-"}</dd>
+              <dd>
+                {thesis.category_id ? (
+                  <button
+                    className="detail-link"
+                    onClick={() => navigate(`/research-areas/${thesis.category_id}`)}
+                  >
+                    {categoryNames[thesis.category_id] || thesis.category_id}
+                  </button>
+                ) : (
+                  "-"
+                )}
+              </dd>
             </div>
             <div>
               <dt>Subcategory</dt>
-              <dd>{subcategoryNames[thesis.subcategory_id] || thesis.subcategory_id || "-"}</dd>
+              <dd>
+                {thesis.subcategory_id ? (
+                  <button
+                    className="detail-link"
+                    onClick={() =>
+                      navigate(
+                        `/research-areas/${thesis.subcategory_id[0]}#subcategory-${thesis.subcategory_id}`
+                      )
+                    }
+                  >
+                    {subcategoryNames[thesis.subcategory_id] || thesis.subcategory_id}
+                  </button>
+                ) : (
+                  "-"
+                )}
+              </dd>
             </div>
           </dl>
         </article>

@@ -1,12 +1,10 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import distinct, func
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Thesis, Category, Subcategory
-
-from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="Prehospitala Avhandlingar",
@@ -20,16 +18,6 @@ app.add_middleware(
         "http://localhost:5174",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -131,6 +119,68 @@ def get_stats_by_category(db: Session = Depends(get_db)):
 @app.get("/stats/by-year")
 def get_stats_by_year(db: Session = Depends(get_db)):
     return grouped_counts(db, Thesis.year, order_by_count=False, exclude_empty=False)
+
+
+def serialize_thesis(thesis: Thesis):
+    return {
+        "id": thesis.id,
+        "running_number": thesis.running_number,
+        "author": thesis.author,
+        "profession": thesis.profession,
+        "university": thesis.university,
+        "year": thesis.year,
+        "title": thesis.title,
+        "category_id": thesis.category_id,
+        "subcategory_id": thesis.subcategory_id,
+        "source": thesis.source,
+    }
+
+
+def serialize_research_area(category: Category, db: Session):
+    subcategories = (
+        db.query(Subcategory)
+        .filter(Subcategory.category_id == category.id)
+        .order_by(Subcategory.id)
+        .all()
+    )
+
+    serialized_subcategories = []
+    for subcategory in subcategories:
+        theses = (
+            db.query(Thesis)
+            .filter(Thesis.subcategory_id == subcategory.id)
+            .order_by(Thesis.running_number)
+            .all()
+        )
+        serialized_subcategories.append(
+            {
+                "id": subcategory.id,
+                "name": subcategory.name,
+                "narrative_text": subcategory.narrative_text,
+                "theses": [serialize_thesis(thesis) for thesis in theses],
+            }
+        )
+
+    return {
+        "id": category.id,
+        "name": category.name,
+        "narrative_text": category.narrative_text,
+        "subcategories": serialized_subcategories,
+    }
+
+
+@app.get("/research-areas")
+def get_research_areas(db: Session = Depends(get_db)):
+    categories = db.query(Category).order_by(Category.id).all()
+    return [serialize_research_area(category, db) for category in categories]
+
+
+@app.get("/research-areas/{category_id}")
+def get_research_area(category_id: str, db: Session = Depends(get_db)):
+    category = db.get(Category, category_id.upper())
+    if category is None:
+        raise HTTPException(status_code=404, detail="Research area not found")
+    return serialize_research_area(category, db)
 
 
 @app.get("/categories")

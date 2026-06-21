@@ -36,6 +36,7 @@ class Thesis(Base):
     university = Column(String)
     year = Column(Integer)
     title = Column(Text, nullable=False)
+    degree_type = Column(String, default="Doktorsavhandling")
 
     category_id = Column(String)
     subcategory_id = Column(String, ForeignKey("subcategories.id"))

@@ -141,6 +141,7 @@ def serialize_thesis(thesis: Thesis):
         "university": thesis.university,
         "year": thesis.year,
         "title": thesis.title,
+        "degree_type": thesis.degree_type,
         "category_id": thesis.category_id,
         "subcategory_id": thesis.subcategory_id,
         "source": thesis.source,

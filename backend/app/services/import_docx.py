@@ -1,5 +1,6 @@
 import re
 from docx import Document
+from sqlalchemy import inspect, text
 
 from app.database import Base, engine, SessionLocal
 from app.models import Category, Subcategory, Thesis
@@ -10,6 +11,17 @@ DOCX_PATH = "../data/raw/Rapport.docx"
 
 def clean(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
+
+
+def ensure_degree_type_column():
+    columns = {column["name"] for column in inspect(engine).get_columns("theses")}
+    if "degree_type" not in columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE theses ADD COLUMN degree_type VARCHAR"))
+
+
+def normalize_university(university: str) -> str:
+    return clean(university).rstrip(" ,")
 
 
 def parse_metadata(text: str):
@@ -23,17 +35,26 @@ def parse_metadata(text: str):
     if not match:
         return None
 
+    raw_university = clean(match.group(4))
+    degree_type = "Doktorsavhandling"
+
+    if "Licentiatavhandling" in raw_university:
+        degree_type = "Licentiatavhandling"
+        _, _, raw_university = raw_university.partition(",")
+
     return {
         "running_number": int(match.group(1)),
         "author": clean(match.group(2)),
         "profession": clean(match.group(3)),
-        "university": clean(match.group(4)),
+        "university": normalize_university(raw_university),
         "year": int(match.group(5)),
+        "degree_type": degree_type,
     }
 
 
 def import_docx():
     Base.metadata.create_all(bind=engine)
+    ensure_degree_type_column()
 
     doc = Document(DOCX_PATH)
     table = doc.tables[0]
@@ -101,12 +122,29 @@ def import_docx():
                     university=metadata["university"],
                     year=metadata["year"],
                     title=right,
+                    degree_type=metadata["degree_type"],
                     category_id=current_category.id if current_category else None,
                     subcategory_id=current_subcategory.id if current_subcategory else None,
                     source="Rapport.docx",
                 )
                 db.add(thesis)
                 imported += 1
+            else:
+                exists.author = metadata["author"]
+                exists.profession = metadata["profession"]
+                exists.university = metadata["university"]
+                exists.year = metadata["year"]
+                exists.title = right
+                exists.degree_type = metadata["degree_type"]
+                exists.category_id = current_category.id if current_category else None
+                exists.subcategory_id = current_subcategory.id if current_subcategory else None
+                if not exists.source:
+                    exists.source = "Rapport.docx"
+
+    db.query(Thesis).filter(Thesis.degree_type.is_(None)).update(
+        {Thesis.degree_type: "Doktorsavhandling"},
+        synchronize_session=False,
+    )
 
     db.commit()
 

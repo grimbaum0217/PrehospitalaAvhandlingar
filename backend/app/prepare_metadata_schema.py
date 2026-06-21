@@ -5,6 +5,7 @@ from app import models
 
 
 THESIS_METADATA_COLUMNS = {
+    "degree_type": "VARCHAR",
     "abstract": "TEXT",
     "dissertation_url": "VARCHAR",
     "pdf_url": "VARCHAR",

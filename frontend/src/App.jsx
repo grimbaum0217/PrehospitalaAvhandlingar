@@ -513,10 +513,19 @@ function NarrativeText({ text }) {
 
 function ThesisDetail({ runningNumber }) {
   const { data: thesis, loading, error } = useApi(`/theses/${runningNumber}`);
+  const papers = useApi(`/theses/${runningNumber}/papers`);
   const { data: categories } = useApi("/categories");
   const { data: subcategories } = useApi("/subcategories");
   const categoryNames = useMemo(() => makeNameMap(categories), [categories]);
   const subcategoryNames = useMemo(() => makeNameMap(subcategories), [subcategories]);
+  const hasDigitalMetadata = Boolean(
+    thesis?.abstract ||
+      thesis?.dissertation_url ||
+      thesis?.pdf_url ||
+      thesis?.doi ||
+      thesis?.urn ||
+      (papers.data && papers.data.length > 0)
+  );
 
   return (
     <section className="page-section detail-section">
@@ -582,6 +591,90 @@ function ThesisDetail({ runningNumber }) {
               </dd>
             </div>
           </dl>
+
+          <section className="digital-metadata">
+            <h2>Digital metadata</h2>
+            {!hasDigitalMetadata && (
+              <p className="placeholder-text">Digital metadata has not been added yet.</p>
+            )}
+
+            {thesis.abstract && (
+              <div className="metadata-block">
+                <h3>Abstract</h3>
+                <NarrativeText text={thesis.abstract} />
+              </div>
+            )}
+
+            {(thesis.dissertation_url || thesis.pdf_url || thesis.doi || thesis.urn) && (
+              <dl className="metadata-list">
+                {thesis.dissertation_url && (
+                  <div>
+                    <dt>Dissertation URL</dt>
+                    <dd>
+                      <a href={thesis.dissertation_url} target="_blank" rel="noreferrer">
+                        Open dissertation record
+                      </a>
+                    </dd>
+                  </div>
+                )}
+                {thesis.pdf_url && (
+                  <div>
+                    <dt>PDF</dt>
+                    <dd>
+                      <a href={thesis.pdf_url} target="_blank" rel="noreferrer">
+                        Open PDF
+                      </a>
+                    </dd>
+                  </div>
+                )}
+                {thesis.doi && (
+                  <div>
+                    <dt>DOI</dt>
+                    <dd>
+                      <a href={doiUrl(thesis.doi)} target="_blank" rel="noreferrer">
+                        {thesis.doi}
+                      </a>
+                    </dd>
+                  </div>
+                )}
+                {thesis.urn && (
+                  <div>
+                    <dt>URN</dt>
+                    <dd>{thesis.urn}</dd>
+                  </div>
+                )}
+              </dl>
+            )}
+
+            {papers.loading && <Status message="Loading included papers..." />}
+            {papers.error && <Status message="Could not load included papers." />}
+            {papers.data && papers.data.length > 0 && (
+              <div className="metadata-block">
+                <h3>Included papers</h3>
+                <div className="paper-list">
+                  {papers.data.map((paper) => (
+                    <article className="paper-item" key={paper.id}>
+                      <h4>
+                        {paper.url ? (
+                          <a href={paper.url} target="_blank" rel="noreferrer">
+                            {paper.title}
+                          </a>
+                        ) : (
+                          paper.title
+                        )}
+                      </h4>
+                      <p className="paper-meta">
+                        {[paper.journal, paper.year, paper.doi && `DOI: ${paper.doi}`, paper.pubmed_id && `PubMed: ${paper.pubmed_id}`]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                      {paper.abstract && <NarrativeText text={paper.abstract} />}
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
         </article>
       )}
     </section>
@@ -622,6 +715,10 @@ function makeNameMap(rows) {
 
 function encodePathValue(value) {
   return encodeURIComponent(String(value));
+}
+
+function doiUrl(doi) {
+  return doi.startsWith("http") ? doi : `https://doi.org/${doi}`;
 }
 
 export default App;

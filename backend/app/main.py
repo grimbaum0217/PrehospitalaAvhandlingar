@@ -4,7 +4,7 @@ from sqlalchemy import distinct, func
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Thesis, Category, Subcategory
+from app.models import Thesis, Category, Subcategory, IncludedPaper
 
 app = FastAPI(
     title="Prehospitala Avhandlingar",
@@ -51,6 +51,17 @@ def get_thesis(running_number: int, db: Session = Depends(get_db)):
         .filter(Thesis.running_number == running_number)
         .first()
     )
+    return thesis
+
+
+def get_thesis_or_404(running_number: int, db: Session):
+    thesis = (
+        db.query(Thesis)
+        .filter(Thesis.running_number == running_number)
+        .first()
+    )
+    if thesis is None:
+        raise HTTPException(status_code=404, detail="Thesis not found")
     return thesis
 
 
@@ -133,7 +144,65 @@ def serialize_thesis(thesis: Thesis):
         "category_id": thesis.category_id,
         "subcategory_id": thesis.subcategory_id,
         "source": thesis.source,
+        "abstract": thesis.abstract,
+        "dissertation_url": thesis.dissertation_url,
+        "pdf_url": thesis.pdf_url,
+        "doi": thesis.doi,
+        "urn": thesis.urn,
     }
+
+
+def serialize_paper(paper: IncludedPaper):
+    return {
+        "id": paper.id,
+        "thesis_id": paper.thesis_id,
+        "title": paper.title,
+        "journal": paper.journal,
+        "year": paper.year,
+        "doi": paper.doi,
+        "pubmed_id": paper.pubmed_id,
+        "url": paper.url,
+        "abstract": paper.abstract,
+    }
+
+
+@app.get("/theses/{running_number}/papers")
+def get_included_papers(running_number: int, db: Session = Depends(get_db)):
+    thesis = get_thesis_or_404(running_number, db)
+    papers = (
+        db.query(IncludedPaper)
+        .filter(IncludedPaper.thesis_id == thesis.id)
+        .order_by(IncludedPaper.year, IncludedPaper.id)
+        .all()
+    )
+    return [serialize_paper(paper) for paper in papers]
+
+
+@app.post("/theses/{running_number}/papers")
+def create_included_paper(
+    running_number: int,
+    paper_data: dict,
+    db: Session = Depends(get_db),
+):
+    thesis = get_thesis_or_404(running_number, db)
+    title = paper_data.get("title")
+    if not title:
+        raise HTTPException(status_code=400, detail="Paper title is required")
+
+    paper = IncludedPaper(
+        thesis_id=thesis.id,
+        title=title,
+        journal=paper_data.get("journal"),
+        year=paper_data.get("year"),
+        doi=paper_data.get("doi"),
+        pubmed_id=paper_data.get("pubmed_id"),
+        url=paper_data.get("url"),
+        abstract=paper_data.get("abstract"),
+    )
+    db.add(paper)
+    db.commit()
+    db.refresh(paper)
+    return serialize_paper(paper)
 
 
 def serialize_research_area(category: Category, db: Session):

@@ -41,5 +41,27 @@ class Thesis(Base):
     subcategory_id = Column(String, ForeignKey("subcategories.id"))
 
     source = Column(String)
+    abstract = Column(Text)
+    dissertation_url = Column(String)
+    pdf_url = Column(String)
+    doi = Column(String)
+    urn = Column(String)
 
     subcategory = relationship("Subcategory", back_populates="theses")
+    included_papers = relationship("IncludedPaper", back_populates="thesis")
+
+
+class IncludedPaper(Base):
+    __tablename__ = "included_papers"
+
+    id = Column(Integer, primary_key=True)
+    thesis_id = Column(Integer, ForeignKey("theses.id"), nullable=False)
+    title = Column(Text, nullable=False)
+    journal = Column(String)
+    year = Column(Integer)
+    doi = Column(String)
+    pubmed_id = Column(String)
+    url = Column(String)
+    abstract = Column(Text)
+
+    thesis = relationship("Thesis", back_populates="included_papers")

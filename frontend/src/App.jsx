@@ -108,6 +108,35 @@ const translations = {
     statusUpdated: "Status uppdaterad.",
     statusUpdateFailed: "Kunde inte uppdatera status.",
     lastChecked: "Senast kontrollerad",
+    discovery: "Discovery",
+    dissertationDiscovery: "Avhandlingsdiscovery",
+    runDiscovery: "Kör discovery",
+    yearFrom: "Från år",
+    yearTo: "Till år",
+    source: "Källa",
+    keywordGroup: "Nyckelordsgrupp",
+    knownPerson: "Känd person",
+    knownPersonPlaceholder: "Ex. Hanna Maurin Söderholm",
+    allSources: "Alla källor",
+    allKeywords: "Alla nyckelord",
+    swedishKeywords: "Svenska",
+    englishKeywords: "Engelska",
+    allMatches: "Nya och möjliga dubbletter",
+    newCandidate: "Ny kandidat",
+    possibleDuplicate: "Möjlig dubblett",
+    alreadyInDatabase: "Finns redan i databasen",
+    includeAlreadyKnown: "Visa redan kända träffar",
+    matchedKeywords: "Matchade nyckelord",
+    possibleDuplicateWarning: "Möjlig dubblett",
+    matchedExistingThesis: "Matchar befintlig avhandling",
+    similarity: "Likhet",
+    approve: "Godkänn",
+    reject: "Avvisa",
+    needsReviewAction: "Behöver granskas",
+    approved: "Godkänd",
+    rejected: "Avvisad",
+    discoveryStored: "Sparade kandidater",
+    skippedKnown: "Hoppade över kända",
   },
   en: {
     overview: "Statistics",
@@ -214,6 +243,35 @@ const translations = {
     statusUpdated: "Status updated.",
     statusUpdateFailed: "Could not update status.",
     lastChecked: "Last checked",
+    discovery: "Discovery",
+    dissertationDiscovery: "Dissertation discovery",
+    runDiscovery: "Run discovery",
+    yearFrom: "From year",
+    yearTo: "To year",
+    source: "Source",
+    keywordGroup: "Keyword group",
+    knownPerson: "Known person",
+    knownPersonPlaceholder: "E.g. Hanna Maurin Söderholm",
+    allSources: "All sources",
+    allKeywords: "All keywords",
+    swedishKeywords: "Swedish",
+    englishKeywords: "English",
+    allMatches: "New and possible duplicates",
+    newCandidate: "New candidate",
+    possibleDuplicate: "Possible duplicate",
+    alreadyInDatabase: "Already in database",
+    includeAlreadyKnown: "Show already known matches",
+    matchedKeywords: "Matched keywords",
+    possibleDuplicateWarning: "Possible duplicate",
+    matchedExistingThesis: "Matches existing thesis",
+    similarity: "Similarity",
+    approve: "Approve",
+    reject: "Reject",
+    needsReviewAction: "Needs review",
+    approved: "Approved",
+    rejected: "Rejected",
+    discoveryStored: "Stored candidates",
+    skippedKnown: "Skipped known",
   },
 };
 
@@ -349,6 +407,14 @@ function App() {
           >
             {t("references")}
           </button>
+          {isAdmin && (
+            <button
+              className={contentPath === "/discovery" ? "active" : ""}
+              onClick={() => navigate("/discovery", true)}
+            >
+              {t("discovery")}
+            </button>
+          )}
         </nav>
         <div className="header-actions">
           <button className={isAdmin ? "active" : ""} onClick={() => navigate("/theses", !isAdmin)}>
@@ -372,6 +438,7 @@ function App() {
         {contentPath === "/research-areas" && <ResearchAreasPage isAdmin={isAdmin} t={t} />}
         {researchAreaMatch && <ResearchAreasPage categoryId={researchAreaMatch[1]} isAdmin={isAdmin} t={t} />}
         {contentPath === "/references" && <ReferencesPage t={t} />}
+        {isAdmin && contentPath === "/discovery" && <DiscoveryPage t={t} />}
         {detailMatch && <ThesisDetail isAdmin={isAdmin} runningNumber={detailMatch[1]} t={t} />}
         {filteredMatch && (
           <FilteredThesesPage
@@ -851,6 +918,232 @@ function ReferencesPage({ t }) {
           ))}
         </ol>
       )}
+    </section>
+  );
+}
+
+function DiscoveryPage({ t }) {
+  const currentYear = new Date().getFullYear();
+  const [searchForm, setSearchForm] = useState({
+    year_from: "2024",
+    year_to: String(currentYear),
+    source: "all",
+    keyword_group: "all",
+    known_person: "",
+  });
+  const [filters, setFilters] = useState({
+    match_status: "all",
+    include_known: false,
+  });
+  const [candidates, setCandidates] = useState([]);
+  const [status, setStatus] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set("match_status", filters.match_status);
+    params.set("include_known", filters.include_known ? "true" : "false");
+
+    fetchJson(`/discovery/candidates?${params.toString()}`)
+      .then((data) => setCandidates(data))
+      .catch(() => setStatus(t("couldNotLoadData")));
+  }, [filters, reloadKey]);
+
+  async function handleSearch(event) {
+    event.preventDefault();
+    setStatus(t("searching"));
+    try {
+      const result = await sendJson("/discovery/search", "POST", {
+        ...searchForm,
+        show_known_matches: filters.include_known,
+      });
+      setStatus(`${t("discoveryStored")}: ${result.stored}. ${t("skippedKnown")}: ${result.skipped_known}.`);
+      setReloadKey((current) => current + 1);
+    } catch {
+      setStatus(t("lookupFailed"));
+    }
+  }
+
+  async function updateCandidate(candidateId, reviewStatus) {
+    try {
+      const saved = await sendJson(`/discovery/candidates/${candidateId}`, "PATCH", {
+        review_status: reviewStatus,
+      });
+      setCandidates((current) =>
+        current.map((candidate) => (candidate.id === candidateId ? saved : candidate))
+      );
+    } catch {
+      setStatus(t("statusUpdateFailed"));
+    }
+  }
+
+  return (
+    <section className="page-section discovery-page">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">{t("adminMode")}</p>
+          <h1>{t("dissertationDiscovery")}</h1>
+        </div>
+        <span className="result-count">{candidates.length} {t("results")}</span>
+      </div>
+
+      <form className="discovery-controls" onSubmit={handleSearch}>
+        <label>
+          <span>{t("yearFrom")}</span>
+          <input
+            inputMode="numeric"
+            value={searchForm.year_from}
+            onChange={(event) =>
+              setSearchForm((current) => ({ ...current, year_from: event.target.value }))
+            }
+          />
+        </label>
+        <label>
+          <span>{t("yearTo")}</span>
+          <input
+            inputMode="numeric"
+            value={searchForm.year_to}
+            onChange={(event) =>
+              setSearchForm((current) => ({ ...current, year_to: event.target.value }))
+            }
+          />
+        </label>
+        <label>
+          <span>{t("source")}</span>
+          <select
+            value={searchForm.source}
+            onChange={(event) =>
+              setSearchForm((current) => ({ ...current, source: event.target.value }))
+            }
+          >
+            <option value="all">{t("allSources")}</option>
+            <option value="diva">DiVA</option>
+            <option value="swepub">SwePub</option>
+            <option value="libris">LIBRIS</option>
+            <option value="avhandlingar">avhandlingar.se</option>
+          </select>
+        </label>
+        <label>
+          <span>{t("keywordGroup")}</span>
+          <select
+            value={searchForm.keyword_group}
+            onChange={(event) =>
+              setSearchForm((current) => ({ ...current, keyword_group: event.target.value }))
+            }
+          >
+            <option value="all">{t("allKeywords")}</option>
+            <option value="swedish">{t("swedishKeywords")}</option>
+            <option value="english">{t("englishKeywords")}</option>
+          </select>
+        </label>
+        <label className="wide-control">
+          <span>{t("knownPerson")}</span>
+          <input
+            placeholder={t("knownPersonPlaceholder")}
+            value={searchForm.known_person}
+            onChange={(event) =>
+              setSearchForm((current) => ({ ...current, known_person: event.target.value }))
+            }
+          />
+        </label>
+        <div className="form-actions">
+          <button className="primary-button" type="submit">{t("runDiscovery")}</button>
+        </div>
+      </form>
+
+      <div className="discovery-filters">
+        <SelectFilter
+          label={t("metadataStatus")}
+          value={filters.match_status}
+          options={[
+            { value: "all", label: t("allMatches") },
+            { value: "new_candidate", label: t("newCandidate") },
+            { value: "possible_duplicate", label: t("possibleDuplicate") },
+            { value: "already_in_database", label: t("alreadyInDatabase") },
+          ]}
+          onChange={(value) => setFilters((current) => ({ ...current, match_status: value }))}
+          t={t}
+        />
+        <label className="checkbox-filter">
+          <input
+            checked={filters.include_known}
+            onChange={(event) =>
+              setFilters((current) => ({ ...current, include_known: event.target.checked }))
+            }
+            type="checkbox"
+          />
+          <span>{t("includeAlreadyKnown")}</span>
+        </label>
+      </div>
+
+      {status && <p className="status">{status}</p>}
+
+      <div className="candidate-list">
+        {candidates.map((candidate) => (
+          <article className="candidate-card" key={candidate.id}>
+            <div className="candidate-heading">
+              <div>
+                <h4>{candidate.title}</h4>
+                <p className="paper-meta">
+                  {[candidate.author, candidate.university, candidate.year, candidate.source]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              </div>
+              <span className={`metadata-status-badge status-${candidate.match_status}`}>
+                {discoveryMatchLabel(candidate.match_status, t)}
+              </span>
+            </div>
+            <p className="paper-meta">
+              {t("matchedKeywords")}: {(candidate.matched_keywords ?? []).join(", ") || "-"}
+            </p>
+            {candidate.match_status === "possible_duplicate" && (
+              <p className="duplicate-warning">
+                {t("possibleDuplicateWarning")}: {t("similarity")} {candidate.similarity_to_existing}
+                {candidate.matched_existing_running_number &&
+                  ` · ${t("matchedExistingThesis")} #${candidate.matched_existing_running_number}`}
+              </p>
+            )}
+            {candidate.match_status === "already_in_database" && (
+              <p className="duplicate-warning">
+                {t("alreadyInDatabase")}
+                {candidate.matched_existing_running_number &&
+                  ` · #${candidate.matched_existing_running_number}`}
+              </p>
+            )}
+            {candidate.source_url && (
+              <a href={candidate.source_url} target="_blank" rel="noreferrer">
+                {t("openDissertationRecord")}
+              </a>
+            )}
+            <div className="form-actions">
+              <button
+                className="primary-button"
+                disabled={candidate.match_status === "already_in_database"}
+                onClick={() => updateCandidate(candidate.id, "approved")}
+                type="button"
+              >
+                {t("approve")}
+              </button>
+              <button
+                className="secondary-button"
+                onClick={() => updateCandidate(candidate.id, "needs_review")}
+                type="button"
+              >
+                {t("needsReviewAction")}
+              </button>
+              <button
+                className="secondary-button"
+                onClick={() => updateCandidate(candidate.id, "rejected")}
+                type="button"
+              >
+                {t("reject")}
+              </button>
+              <span className="form-status">{reviewStatusLabel(candidate.review_status, t)}</span>
+            </div>
+          </article>
+        ))}
+      </div>
     </section>
   );
 }
@@ -1476,6 +1769,24 @@ function metadataStatus(thesis) {
 function formatDateTime(value) {
   if (!value) return "";
   return new Date(value).toLocaleString();
+}
+
+function discoveryMatchLabel(status, t) {
+  const labels = {
+    new_candidate: t("newCandidate"),
+    possible_duplicate: t("possibleDuplicate"),
+    already_in_database: t("alreadyInDatabase"),
+  };
+  return labels[status] ?? status;
+}
+
+function reviewStatusLabel(status, t) {
+  const labels = {
+    approved: t("approved"),
+    rejected: t("rejected"),
+    needs_review: t("needsReviewAction"),
+  };
+  return labels[status] ?? status;
 }
 
 function makeNameMap(rows) {

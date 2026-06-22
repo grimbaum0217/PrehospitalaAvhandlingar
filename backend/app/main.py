@@ -6,9 +6,15 @@ from sqlalchemy import distinct, func, text
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
+from app.database import Base
 from app.database import engine
-from app.models import Thesis, Category, Subcategory, IncludedPaper, Reference
+from app.models import Thesis, Category, Subcategory, IncludedPaper, Reference, DiscoveryCandidate
 from app.providers.common import MetadataError
+from app.services.discovery import (
+    discover_candidates,
+    list_discovery_candidates,
+    serialize_discovery_candidate,
+)
 from app.services.metadata_lookup import lookup_metadata_candidates, lookup_metadata_url
 
 METADATA_STATUSES = {
@@ -25,6 +31,7 @@ def utcnow():
 
 
 def ensure_metadata_workflow_columns():
+    Base.metadata.create_all(bind=engine)
     with engine.begin() as connection:
         columns = {
             row[1] for row in connection.execute(text("PRAGMA table_info(theses)")).fetchall()
@@ -152,6 +159,48 @@ def lookup_metadata_from_url(payload: dict):
         return lookup_metadata_url(url)
     except MetadataError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/discovery/search")
+def run_discovery_search(payload: dict, db: Session = Depends(get_db)):
+    return discover_candidates(db, payload)
+
+
+@app.get("/discovery/candidates")
+def get_discovery_candidates(
+    match_status: str | None = None,
+    review_status: str | None = None,
+    include_known: bool = False,
+    db: Session = Depends(get_db),
+):
+    candidates = list_discovery_candidates(
+        db,
+        {
+            "match_status": match_status,
+            "review_status": review_status,
+            "include_known": include_known,
+        },
+    )
+    return [serialize_discovery_candidate(candidate) for candidate in candidates]
+
+
+@app.patch("/discovery/candidates/{candidate_id}")
+def update_discovery_candidate(candidate_id: int, payload: dict, db: Session = Depends(get_db)):
+    review_status = payload.get("review_status")
+    if review_status not in {"approved", "rejected", "needs_review"}:
+        raise HTTPException(status_code=400, detail="Invalid review status")
+
+    candidate = db.query(DiscoveryCandidate).filter(DiscoveryCandidate.id == candidate_id).first()
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="Discovery candidate not found")
+    if review_status == "approved" and candidate.match_status == "already_in_database":
+        raise HTTPException(status_code=400, detail="Known database matches cannot be approved as missing theses")
+
+    candidate.review_status = review_status
+    candidate.updated_at = utcnow()
+    db.commit()
+    db.refresh(candidate)
+    return serialize_discovery_candidate(candidate)
 
 
 def get_thesis_or_404(running_number: int, db: Session):

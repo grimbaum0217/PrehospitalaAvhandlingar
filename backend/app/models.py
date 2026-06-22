@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Integer, String, Text, ForeignKey
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -68,6 +68,31 @@ class IncludedPaper(Base):
     abstract = Column(Text)
 
     thesis = relationship("Thesis", back_populates="included_papers")
+
+
+class DiscoveryCandidate(Base):
+    __tablename__ = "discovery_candidates"
+
+    id = Column(Integer, primary_key=True)
+    title = Column(Text, nullable=False)
+    author = Column(String)
+    university = Column(String)
+    year = Column(Integer)
+    abstract = Column(Text)
+    source = Column(String, nullable=False)
+    source_url = Column(String)
+    pdf_url = Column(String)
+    doi = Column(String)
+    urn = Column(String)
+    matched_keywords = Column(Text)
+    keyword_group = Column(String)
+    match_status = Column(String, default="new_candidate", nullable=False)
+    similarity_to_existing = Column(Float)
+    matched_existing_thesis_id = Column(Integer)
+    matched_existing_running_number = Column(Integer)
+    review_status = Column(String, default="needs_review", nullable=False)
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
 
 
 class Reference(Base):

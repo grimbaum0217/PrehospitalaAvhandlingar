@@ -447,6 +447,20 @@ a:hover {
   border-color: #e4c77f;
 }
 
+.status-new_candidate {
+  background: #e7f5ed;
+  border-color: #b8dcc7;
+}
+
+.status-possible_duplicate {
+  background: #fff8e8;
+  border-color: #e4c77f;
+}
+
+.status-already_in_database {
+  background: #f4f0e8;
+}
+
 .detail-section {
   max-width: 860px;
   margin-left: 0;
@@ -659,7 +673,10 @@ a:hover {
 }
 
 .metadata-form input,
-.metadata-form textarea {
+.metadata-form textarea,
+.discovery-controls input,
+.discovery-controls select,
+.discovery-filters select {
   background: #ffffff;
   border: 1px solid #cfc7ba;
   border-radius: 6px;
@@ -736,6 +753,61 @@ a:hover {
   padding: 16px;
 }
 
+.discovery-controls,
+.discovery-filters {
+  background: #ffffff;
+  border: 1px solid #ddd8ce;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 16px;
+}
+
+.discovery-controls {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.discovery-filters {
+  align-items: end;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+}
+
+.discovery-controls label,
+.discovery-filters label {
+  color: #475467;
+  display: grid;
+  font-size: 0.9rem;
+  gap: 6px;
+}
+
+.discovery-controls .wide-control {
+  grid-column: span 3;
+}
+
+.checkbox-filter {
+  align-items: center;
+  display: flex !important;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.candidate-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.duplicate-warning {
+  background: #fff8e8;
+  border: 1px solid #e4c77f;
+  border-radius: 6px;
+  color: #6f3d2e;
+  margin: 0;
+  padding: 8px 10px;
+}
+
 .references-page {
   max-width: 960px;
   margin-left: 0;
@@ -784,7 +856,8 @@ a:hover {
 @media (max-width: 880px) {
   .overview-grid,
   .stats-grid,
-  .filters {
+  .filters,
+  .discovery-controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -810,8 +883,14 @@ a:hover {
   .detail dl,
   .metadata-list,
   .metadata-form-grid,
-  .lookup-url-form {
+  .lookup-url-form,
+  .discovery-controls,
+  .discovery-filters {
     grid-template-columns: 1fr;
+  }
+
+  .discovery-controls .wide-control {
+    grid-column: auto;
   }
 
   .thesis-row {

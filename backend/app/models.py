@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey
+from sqlalchemy import Column, DateTime, Integer, String, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -47,6 +47,8 @@ class Thesis(Base):
     pdf_url = Column(String)
     doi = Column(String)
     urn = Column(String)
+    metadata_status = Column(String, default="not_started", nullable=False)
+    metadata_last_checked_at = Column(DateTime)
 
     subcategory = relationship("Subcategory", back_populates="theses")
     included_papers = relationship("IncludedPaper", back_populates="thesis")

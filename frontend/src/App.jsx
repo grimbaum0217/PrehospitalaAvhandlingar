@@ -97,6 +97,17 @@ const translations = {
     paperSaveFailed: "Kunde inte spara artikel.",
     confidence: "Konfidens",
     untitledCandidate: "Namnlös kandidat",
+    metadataStatus: "Metadatastatus",
+    not_started: "Ej påbörjad",
+    candidate_found: "Kandidat hittad",
+    accepted: "Accepterad",
+    not_found: "Ej hittad",
+    needs_review: "Behöver granskas",
+    markNotFound: "Markera ej hittad",
+    markNeedsReview: "Markera behöver granskas",
+    statusUpdated: "Status uppdaterad.",
+    statusUpdateFailed: "Kunde inte uppdatera status.",
+    lastChecked: "Senast kontrollerad",
   },
   en: {
     overview: "Statistics",
@@ -192,8 +203,27 @@ const translations = {
     paperSaveFailed: "Could not save paper.",
     confidence: "Confidence",
     untitledCandidate: "Untitled candidate",
+    metadataStatus: "Metadata status",
+    not_started: "Not started",
+    candidate_found: "Candidate found",
+    accepted: "Accepted",
+    not_found: "Not found",
+    needs_review: "Needs review",
+    markNotFound: "Mark not found",
+    markNeedsReview: "Mark needs review",
+    statusUpdated: "Status updated.",
+    statusUpdateFailed: "Could not update status.",
+    lastChecked: "Last checked",
   },
 };
+
+const metadataStatusOptions = [
+  "not_started",
+  "candidate_found",
+  "accepted",
+  "not_found",
+  "needs_review",
+];
 
 const overviewFields = [
   ["total_theses", "totalTheses"],
@@ -460,6 +490,7 @@ function ThesesPage({ isAdmin, t }) {
     university: "",
     profession: "",
     year: "",
+    metadata_status: "",
   });
 
   const categoryNames = useMemo(() => makeNameMap(categories), [categories]);
@@ -483,10 +514,11 @@ function ThesesPage({ isAdmin, t }) {
         matchesFilter(thesis.category_id, filters.category) &&
         matchesFilter(thesis.university, filters.university) &&
         matchesFilter(thesis.profession, filters.profession) &&
-        matchesFilter(thesis.year, filters.year)
+        matchesFilter(thesis.year, filters.year) &&
+        (!isAdmin || matchesFilter(metadataStatus(thesis), filters.metadata_status))
       );
     });
-  }, [theses, filters]);
+  }, [isAdmin, theses, filters]);
 
   return (
     <section className="page-section">
@@ -531,9 +563,23 @@ function ThesesPage({ isAdmin, t }) {
               onChange={(value) => setFilters((current) => ({ ...current, year: value }))}
               t={t}
             />
+            {isAdmin && (
+              <SelectFilter
+                label={t("metadataStatus")}
+                value={filters.metadata_status}
+                options={metadataStatusOptions.map((status) => ({
+                  value: status,
+                  label: t(status),
+                }))}
+                onChange={(value) =>
+                  setFilters((current) => ({ ...current, metadata_status: value }))
+                }
+                t={t}
+              />
+            )}
           </div>
 
-          <ThesisList isAdmin={isAdmin} theses={filtered} />
+          <ThesisList isAdmin={isAdmin} t={t} theses={filtered} />
         </>
       )}
     </section>
@@ -586,18 +632,18 @@ function FilteredThesesPage({ filterType, filterValue, isAdmin, t }) {
 
       {loading && <Status message={t("loadingTheses")} />}
       {error && <Status message={t("couldNotLoadTheses")} />}
-      {theses && <ThesisList isAdmin={isAdmin} theses={filtered} />}
+      {theses && <ThesisList isAdmin={isAdmin} t={t} theses={filtered} />}
     </section>
   );
 }
 
-function ThesisList({ isAdmin = false, theses }) {
+function ThesisList({ isAdmin = false, t, theses }) {
   const sortedTheses = useMemo(() => sortTheses(theses), [theses]);
   return (
     <div className="thesis-list">
       {sortedTheses.map((thesis) => (
         <button
-          className="thesis-row"
+          className={`thesis-row ${isAdmin ? "thesis-row-admin" : ""}`}
           key={thesis.running_number}
           onClick={() => navigate(`/theses/${thesis.running_number}`, isAdmin)}
         >
@@ -609,6 +655,11 @@ function ThesisList({ isAdmin = false, theses }) {
             </span>
           </span>
           <span className="thesis-meta">{thesis.profession}</span>
+          {isAdmin && (
+            <span className={`metadata-status-badge status-${metadataStatus(thesis)}`}>
+              {t(metadataStatus(thesis))}
+            </span>
+          )}
         </button>
       ))}
     </div>
@@ -754,7 +805,7 @@ function SubcategoryCard({ authorLinks, isAdmin, subcategory, t }) {
       {tab === "theses" && (
         <div className="tab-panel">
           {subcategory.theses.length > 0 ? (
-            <ThesisList isAdmin={isAdmin} theses={subcategory.theses} />
+            <ThesisList isAdmin={isAdmin} t={t} theses={subcategory.theses} />
           ) : (
             <Status message={t("noLinkedTheses")} />
           )}
@@ -838,6 +889,7 @@ function ThesisDetail({ isAdmin, runningNumber, t }) {
   const papers = useApi(`/theses/${runningNumber}/papers?reload=${paperReload}`);
   const { data: categories } = useApi("/categories");
   const { data: subcategories } = useApi("/subcategories");
+  const [workflowStatus, setWorkflowStatus] = useState("");
   const categoryNames = useMemo(() => makeNameMap(categories), [categories]);
   const subcategoryNames = useMemo(() => makeNameMap(subcategories), [subcategories]);
   const thesis = savedThesis ?? thesisRequest.data;
@@ -849,6 +901,19 @@ function ThesisDetail({ isAdmin, runningNumber, t }) {
       thesis?.urn ||
       (papers.data && papers.data.length > 0)
   );
+
+  async function updateMetadataStatus(nextStatus) {
+    setWorkflowStatus(t("saving"));
+    try {
+      const saved = await sendJson(`/theses/${runningNumber}/metadata-status`, "PATCH", {
+        metadata_status: nextStatus,
+      });
+      setSavedThesis(saved);
+      setWorkflowStatus(t("statusUpdated"));
+    } catch {
+      setWorkflowStatus(t("statusUpdateFailed"));
+    }
+  }
 
   return (
     <section className="page-section detail-section">
@@ -862,6 +927,35 @@ function ThesisDetail({ isAdmin, runningNumber, t }) {
         <article className="detail">
           <p className="eyebrow">{t("theses")} #{thesis.running_number}</p>
           <h1>{thesis.title}</h1>
+          <div className="metadata-status-row">
+            <span className={`metadata-status-badge status-${metadataStatus(thesis)}`}>
+              {t(metadataStatus(thesis))}
+            </span>
+            {thesis.metadata_last_checked_at && (
+              <span className="metadata-last-checked">
+                {t("lastChecked")}: {formatDateTime(thesis.metadata_last_checked_at)}
+              </span>
+            )}
+          </div>
+          {isAdmin && (
+            <div className="metadata-status-actions">
+              <button
+                className="secondary-button"
+                onClick={() => updateMetadataStatus("not_found")}
+                type="button"
+              >
+                {t("markNotFound")}
+              </button>
+              <button
+                className="secondary-button"
+                onClick={() => updateMetadataStatus("needs_review")}
+                type="button"
+              >
+                {t("markNeedsReview")}
+              </button>
+              {workflowStatus && <span className="form-status">{workflowStatus}</span>}
+            </div>
+          )}
           <dl>
             <div>
               <dt>{t("author")}</dt>
@@ -1012,6 +1106,13 @@ function ThesisDetail({ isAdmin, runningNumber, t }) {
                   thesis={thesis}
                 />
                 <MetadataLookup
+                  onChecked={(status) =>
+                    setSavedThesis((current) => ({
+                      ...(current ?? thesis),
+                      metadata_status: status,
+                      metadata_last_checked_at: new Date().toISOString(),
+                    }))
+                  }
                   onSaved={setSavedThesis}
                   runningNumber={runningNumber}
                   t={t}
@@ -1101,7 +1202,7 @@ function MetadataEditForm({ onSaved, t, thesis }) {
   );
 }
 
-function MetadataLookup({ onSaved, runningNumber, t }) {
+function MetadataLookup({ onChecked, onSaved, runningNumber, t }) {
   const [lookup, setLookup] = useState({ candidates: [], search: null });
   const [lookupUrl, setLookupUrl] = useState("");
   const [status, setStatus] = useState("");
@@ -1111,6 +1212,7 @@ function MetadataLookup({ onSaved, runningNumber, t }) {
     try {
       const result = await sendJson(`/theses/${runningNumber}/lookup-metadata`, "POST", {});
       setLookup(result);
+      onChecked(result.candidates.length ? "candidate_found" : "not_found");
       setStatus(result.candidates.length ? "" : t("noCandidates"));
     } catch {
       setStatus(t("lookupFailed"));
@@ -1138,6 +1240,10 @@ function MetadataLookup({ onSaved, runningNumber, t }) {
         search: { url: lookupUrl },
         errors: [],
       });
+      await sendJson(`/theses/${runningNumber}/metadata-status`, "PATCH", {
+        metadata_status: "candidate_found",
+      });
+      onChecked("candidate_found");
       setStatus("");
     } catch {
       setStatus(t("urlLookupFailed"));
@@ -1361,6 +1467,15 @@ function sortTheses(theses) {
     if (yearA !== yearB) return yearB - yearA;
     return Number(b.running_number) - Number(a.running_number);
   });
+}
+
+function metadataStatus(thesis) {
+  return thesis?.metadata_status || "not_started";
+}
+
+function formatDateTime(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleString();
 }
 
 function makeNameMap(rows) {

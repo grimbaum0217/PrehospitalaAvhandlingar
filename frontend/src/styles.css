@@ -360,6 +360,10 @@ a:hover {
   text-align: left;
 }
 
+.thesis-row-admin {
+  grid-template-columns: 72px minmax(0, 1fr) minmax(110px, auto) auto;
+}
+
 .thesis-row:hover {
   border-color: #8d7567;
   box-shadow: 0 8px 24px rgba(35, 51, 72, 0.08);
@@ -384,6 +388,63 @@ a:hover {
 
 .thesis-main span {
   color: #52616f;
+}
+
+.metadata-status-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.metadata-status-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.metadata-status-badge {
+  border: 1px solid #cfc7ba;
+  border-radius: 999px;
+  color: #344054;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 700;
+  justify-content: center;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.metadata-last-checked {
+  color: #697586;
+  font-size: 0.9rem;
+}
+
+.status-not_started {
+  background: #f4f0e8;
+}
+
+.status-candidate_found {
+  background: #e8f1ff;
+  border-color: #b8cee8;
+}
+
+.status-accepted {
+  background: #e7f5ed;
+  border-color: #b8dcc7;
+}
+
+.status-not_found {
+  background: #f8e9e7;
+  border-color: #e2bbb4;
+}
+
+.status-needs_review {
+  background: #fff8e8;
+  border-color: #e4c77f;
 }
 
 .detail-section {

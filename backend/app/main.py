@@ -1,12 +1,48 @@
+from datetime import datetime, timezone
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import distinct, func
+from sqlalchemy import distinct, func, text
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
+from app.database import engine
 from app.models import Thesis, Category, Subcategory, IncludedPaper, Reference
 from app.providers.common import MetadataError
 from app.services.metadata_lookup import lookup_metadata_candidates, lookup_metadata_url
+
+METADATA_STATUSES = {
+    "not_started",
+    "candidate_found",
+    "accepted",
+    "not_found",
+    "needs_review",
+}
+
+
+def utcnow():
+    return datetime.now(timezone.utc)
+
+
+def ensure_metadata_workflow_columns():
+    with engine.begin() as connection:
+        columns = {
+            row[1] for row in connection.execute(text("PRAGMA table_info(theses)")).fetchall()
+        }
+        if "metadata_status" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE theses ADD COLUMN metadata_status "
+                    "VARCHAR NOT NULL DEFAULT 'not_started'"
+                )
+            )
+        if "metadata_last_checked_at" not in columns:
+            connection.execute(
+                text("ALTER TABLE theses ADD COLUMN metadata_last_checked_at DATETIME")
+            )
+
+
+ensure_metadata_workflow_columns()
 
 app = FastAPI(
     title="Prehospitala Avhandlingar",
@@ -18,8 +54,10 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:5174",
+        "http://localhost:5175",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -72,6 +110,7 @@ def update_thesis_metadata(
                 value = value.strip() or None
             setattr(thesis, field, value)
 
+    thesis.metadata_status = "accepted"
     db.commit()
     db.refresh(thesis)
     return serialize_thesis(thesis)
@@ -80,7 +119,28 @@ def update_thesis_metadata(
 @app.post("/theses/{running_number}/lookup-metadata")
 def lookup_thesis_metadata(running_number: int, db: Session = Depends(get_db)):
     thesis = get_thesis_or_404(running_number, db)
-    return lookup_metadata_candidates(thesis)
+    result = lookup_metadata_candidates(thesis)
+    thesis.metadata_last_checked_at = utcnow()
+    thesis.metadata_status = "candidate_found" if result["candidates"] else "not_found"
+    db.commit()
+    return result
+
+
+@app.patch("/theses/{running_number}/metadata-status")
+def update_thesis_metadata_status(
+    running_number: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    status = payload.get("metadata_status")
+    if status not in METADATA_STATUSES:
+        raise HTTPException(status_code=400, detail="Invalid metadata status")
+
+    thesis = get_thesis_or_404(running_number, db)
+    thesis.metadata_status = status
+    db.commit()
+    db.refresh(thesis)
+    return serialize_thesis(thesis)
 
 
 @app.post("/metadata/lookup-url")
@@ -190,6 +250,8 @@ def serialize_thesis(thesis: Thesis):
         "pdf_url": thesis.pdf_url,
         "doi": thesis.doi,
         "urn": thesis.urn,
+        "metadata_status": thesis.metadata_status or "not_started",
+        "metadata_last_checked_at": thesis.metadata_last_checked_at,
     }
 
 

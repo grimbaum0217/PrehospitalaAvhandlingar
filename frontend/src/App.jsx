@@ -900,13 +900,30 @@ function MetadataLookup({ onSaved, runningNumber }) {
       </div>
 
       {status && <p className="status">{status}</p>}
+      {lookup.errors?.length > 0 && (
+        <div className="lookup-errors">
+          {lookup.errors.map((error) => (
+            <p className="status" key={error.source}>
+              {error.source}: {error.error}
+            </p>
+          ))}
+        </div>
+      )}
       {lookup.candidates.length > 0 && (
         <div className="candidate-list">
           {lookup.candidates.map((candidate, index) => (
             <article className="candidate-card" key={`${candidate.source}-${index}`}>
               <h4>{candidate.title || "Untitled candidate"}</h4>
               <p className="paper-meta">
-                {[candidate.source, `Confidence: ${candidate.confidence}`].filter(Boolean).join(" · ")}
+                {[
+                  candidate.author,
+                  candidate.university,
+                  candidate.year,
+                  candidate.source,
+                  `Confidence: ${candidate.confidence}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
               <dl className="metadata-list">
                 {candidate.dissertation_url && (

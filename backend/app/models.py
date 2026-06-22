@@ -66,3 +66,11 @@ class IncludedPaper(Base):
     abstract = Column(Text)
 
     thesis = relationship("Thesis", back_populates="included_papers")
+
+
+class Reference(Base):
+    __tablename__ = "references"
+
+    id = Column(Integer, primary_key=True)
+    number = Column(Integer, unique=True, nullable=False)
+    text = Column(Text, nullable=False)

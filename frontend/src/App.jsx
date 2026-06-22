@@ -2,24 +2,223 @@ import { useEffect, useMemo, useState } from "react";
 
 const API_BASE = "http://127.0.0.1:8000";
 
+const translations = {
+  sv: {
+    overview: "Statistik",
+    theses: "Avhandlingar",
+    researchAreas: "Forskningsområden",
+    references: "Referenser",
+    admin: "Admin",
+    publicMode: "Publikt läge",
+    adminMode: "Adminläge",
+    catalogueEyebrow: "Forskningskatalog",
+    homeTitle: "Svenska prehospitala doktorsavhandlingar",
+    homeIntro:
+      "En översikt över avhandlingar, lärosäten, professioner och forskningskategorier i katalogen.",
+    totalTheses: "Avhandlingar",
+    firstYear: "Första år",
+    lastYear: "Senaste år",
+    universities: "Lärosäten",
+    categories: "Kategorier",
+    byUniversity: "Per lärosäte",
+    byProfession: "Per profession",
+    byCategory: "Per kategori",
+    byYear: "Per år",
+    allTheses: "Alla avhandlingar",
+    results: "resultat",
+    category: "Kategori",
+    university: "Lärosäte",
+    profession: "Profession",
+    year: "År",
+    all: "Alla",
+    backToAllTheses: "Till alla avhandlingar",
+    backToTheses: "Till avhandlingar",
+    author: "Författare",
+    subcategory: "Subkategori",
+    digitalThesis: "Digital avhandling",
+    abstract: "Abstrakt",
+    dissertationUrl: "Avhandlingspost",
+    openDissertationRecord: "Öppna avhandlingspost",
+    openPdf: "Öppna PDF",
+    includedPapers: "Ingående artiklar",
+    editMetadata: "Redigera metadata",
+    saveMetadata: "Spara metadata",
+    findDigitalMetadata: "Sök digital metadata",
+    candidatesManual: "Kandidater används aldrig utan godkännande.",
+    lookupFromUrl: "Sök från URL",
+    pasteDivaUrl: "Klistra in en DiVA-post",
+    lookupUrl: "Hämta URL",
+    useMetadata: "Använd denna metadata",
+    addIncludedPaper: "Lägg till ingående artikel",
+    title: "Titel",
+    journal: "Tidskrift",
+    savePaper: "Spara artikel",
+    showMore: "Visa mer",
+    showLess: "Visa mindre",
+    showArea: "Visa området",
+    reportThemes: "Rapportens tematisering",
+    allResearchAreas: "Alla forskningsområden",
+    mainCategory: "Huvudkategori",
+    subcategoryLabel: "Subkategori",
+    overviewTab: "Översikt",
+    publications: "Publikationer",
+    reportSources: "Rapportens källor",
+    referencesCount: "referenser",
+    researchAreasCount: "områden",
+    noDigitalMetadata: "Digital metadata har inte lagts till ännu.",
+    loadingOverview: "Laddar statistik...",
+    loadingTheses: "Laddar avhandlingar...",
+    loadingResearchAreas: "Laddar forskningsområden...",
+    loadingReferences: "Laddar referenser...",
+    loadingPapers: "Laddar ingående artiklar...",
+    loading: "Laddar...",
+    couldNotLoadOverview: "Kunde inte ladda statistik.",
+    couldNotLoadData: "Kunde inte ladda data.",
+    couldNotLoadTheses: "Kunde inte ladda avhandlingar.",
+    couldNotLoadResearchAreas: "Kunde inte ladda forskningsområden.",
+    couldNotLoadReferences: "Kunde inte ladda referenser.",
+    couldNotLoadPapers: "Kunde inte ladda ingående artiklar.",
+    noNarrative: "Ingen narrativ text importerad för denna subkategori.",
+    noLinkedTheses: "Inga avhandlingar är kopplade till denna subkategori.",
+    publicationsLater: "Publikationer läggs till i en senare version.",
+    searching: "Söker...",
+    fetchingUrl: "Hämtar metadata från URL...",
+    noCandidates: "Inga kandidater hittades.",
+    lookupFailed: "Kunde inte söka metadata.",
+    urlLookupFailed: "Kunde inte hämta metadata från URL.",
+    saving: "Sparar...",
+    saved: "Sparat.",
+    saveFailed: "Kunde inte spara metadata.",
+    savingCandidate: "Sparar kandidat...",
+    candidateSaved: "Kandidat sparad.",
+    candidateSaveFailed: "Kunde inte spara kandidat.",
+    titleRequired: "Titel krävs.",
+    paperSaved: "Artikel sparad.",
+    paperSaveFailed: "Kunde inte spara artikel.",
+    confidence: "Konfidens",
+    untitledCandidate: "Namnlös kandidat",
+  },
+  en: {
+    overview: "Statistics",
+    theses: "Dissertations",
+    researchAreas: "Research areas",
+    references: "References",
+    admin: "Admin",
+    publicMode: "Public mode",
+    adminMode: "Admin mode",
+    catalogueEyebrow: "Research catalogue",
+    homeTitle: "Swedish prehospital doctoral theses",
+    homeIntro:
+      "A concise overview of dissertations, institutions, professions, and research categories represented in the catalogue.",
+    totalTheses: "Dissertations",
+    firstYear: "First year",
+    lastYear: "Latest year",
+    universities: "Universities",
+    categories: "Categories",
+    byUniversity: "By university",
+    byProfession: "By profession",
+    byCategory: "By category",
+    byYear: "By year",
+    allTheses: "All dissertations",
+    results: "results",
+    category: "Category",
+    university: "University",
+    profession: "Profession",
+    year: "Year",
+    all: "All",
+    backToAllTheses: "Back to all dissertations",
+    backToTheses: "Back to dissertations",
+    author: "Author",
+    subcategory: "Subcategory",
+    digitalThesis: "Digital dissertation",
+    abstract: "Abstract",
+    dissertationUrl: "Dissertation record",
+    openDissertationRecord: "Open dissertation record",
+    openPdf: "Open PDF",
+    includedPapers: "Included papers",
+    editMetadata: "Edit metadata",
+    saveMetadata: "Save metadata",
+    findDigitalMetadata: "Find digital metadata",
+    candidatesManual: "Candidates are never applied without approval.",
+    lookupFromUrl: "Lookup from URL",
+    pasteDivaUrl: "Paste a DiVA record URL",
+    lookupUrl: "Lookup URL",
+    useMetadata: "Use this metadata",
+    addIncludedPaper: "Add included paper",
+    title: "Title",
+    journal: "Journal",
+    savePaper: "Save paper",
+    showMore: "Show more",
+    showLess: "Show less",
+    showArea: "Show area",
+    reportThemes: "Report themes",
+    allResearchAreas: "All research areas",
+    mainCategory: "Main category",
+    subcategoryLabel: "Subcategory",
+    overviewTab: "Overview",
+    publications: "Publications",
+    reportSources: "Report sources",
+    referencesCount: "references",
+    researchAreasCount: "areas",
+    noDigitalMetadata: "Digital metadata has not been added yet.",
+    loadingOverview: "Loading statistics...",
+    loadingTheses: "Loading dissertations...",
+    loadingResearchAreas: "Loading research areas...",
+    loadingReferences: "Loading references...",
+    loadingPapers: "Loading included papers...",
+    loading: "Loading...",
+    couldNotLoadOverview: "Could not load statistics.",
+    couldNotLoadData: "Could not load data.",
+    couldNotLoadTheses: "Could not load dissertations.",
+    couldNotLoadResearchAreas: "Could not load research areas.",
+    couldNotLoadReferences: "Could not load references.",
+    couldNotLoadPapers: "Could not load included papers.",
+    noNarrative: "No narrative text has been imported for this subcategory.",
+    noLinkedTheses: "No dissertations are linked to this subcategory.",
+    publicationsLater: "Publications will be added in a later version.",
+    searching: "Searching...",
+    fetchingUrl: "Fetching metadata from URL...",
+    noCandidates: "No candidates found.",
+    lookupFailed: "Could not search metadata.",
+    urlLookupFailed: "Could not fetch metadata from URL.",
+    saving: "Saving...",
+    saved: "Saved.",
+    saveFailed: "Could not save metadata.",
+    savingCandidate: "Saving candidate...",
+    candidateSaved: "Candidate saved.",
+    candidateSaveFailed: "Could not save candidate.",
+    titleRequired: "Title is required.",
+    paperSaved: "Paper saved.",
+    paperSaveFailed: "Could not save paper.",
+    confidence: "Confidence",
+    untitledCandidate: "Untitled candidate",
+  },
+};
+
 const overviewFields = [
-  ["total_theses", "Theses"],
-  ["first_year", "First year"],
-  ["last_year", "Last year"],
-  ["universities", "Universities"],
-  ["categories", "Categories"],
+  ["total_theses", "totalTheses"],
+  ["first_year", "firstYear"],
+  ["last_year", "lastYear"],
+  ["universities", "universities"],
+  ["categories", "categories"],
 ];
 
 const statsConfig = [
-  ["byUniversity", "By university"],
-  ["byProfession", "By profession"],
-  ["byCategory", "By category"],
-  ["byYear", "By year"],
+  ["byUniversity", "byUniversity"],
+  ["byProfession", "byProfession"],
+  ["byCategory", "byCategory"],
+  ["byYear", "byYear"],
 ];
 
-function navigate(path) {
-  window.history.pushState({}, "", path);
+function navigate(path, isAdmin = false) {
+  const nextPath = isAdmin ? adminPath(path) : path;
+  window.history.pushState({}, "", nextPath);
   window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+function adminPath(path) {
+  if (path === "/") return "/admin";
+  return `/admin${path}`;
 }
 
 function useRoute() {
@@ -79,52 +278,77 @@ function useApi(path) {
 
 function App() {
   const path = useRoute();
-  const detailMatch = path.match(/^\/theses\/(\d+)$/);
-  const filteredMatch = path.match(/^\/(year|university|profession|category)\/(.+)$/);
-  const researchAreaMatch = path.match(/^\/research-areas\/([A-I])$/);
+  const [language, setLanguageState] = useState(() => localStorage.getItem("language") || "sv");
+  const isAdmin = path === "/admin" || path.startsWith("/admin/");
+  const contentPath = isAdmin ? path.replace(/^\/admin/, "") || "/theses" : path;
+  const detailMatch = contentPath.match(/^\/theses\/(\d+)$/);
+  const filteredMatch = contentPath.match(/^\/(year|university|profession|category)\/(.+)$/);
+  const researchAreaMatch = contentPath.match(/^\/research-areas\/([A-I])$/);
+  const t = (key) => translations[language]?.[key] ?? translations.sv[key] ?? key;
+
+  function setLanguage(nextLanguage) {
+    localStorage.setItem("language", nextLanguage);
+    setLanguageState(nextLanguage);
+  }
 
   return (
     <div className="app-shell">
       <header className="site-header">
-        <button className="brand" onClick={() => navigate("/")}>
+        <button className="brand" onClick={() => navigate("/", isAdmin)}>
           Prehospitala Avhandlingar
         </button>
         <nav aria-label="Primary navigation">
-          <button className={path === "/" ? "active" : ""} onClick={() => navigate("/")}>
-            Overview
+          <button className={contentPath === "/" ? "active" : ""} onClick={() => navigate("/", isAdmin)}>
+            {t("overview")}
           </button>
           <button
-            className={path.startsWith("/theses") || filteredMatch ? "active" : ""}
-            onClick={() => navigate("/theses")}
+            className={contentPath.startsWith("/theses") || filteredMatch ? "active" : ""}
+            onClick={() => navigate("/theses", isAdmin)}
           >
-            Theses
+            {t("theses")}
           </button>
           <button
-            className={path.startsWith("/research-areas") ? "active" : ""}
-            onClick={() => navigate("/research-areas")}
+            className={contentPath.startsWith("/research-areas") ? "active" : ""}
+            onClick={() => navigate("/research-areas", isAdmin)}
           >
-            Forskningsområden
+            {t("researchAreas")}
           </button>
           <button
-            className={path === "/references" ? "active" : ""}
-            onClick={() => navigate("/references")}
+            className={contentPath === "/references" ? "active" : ""}
+            onClick={() => navigate("/references", isAdmin)}
           >
-            Referenser
+            {t("references")}
           </button>
         </nav>
+        <div className="header-actions">
+          <button className={isAdmin ? "active" : ""} onClick={() => navigate("/theses", !isAdmin)}>
+            {isAdmin ? t("publicMode") : t("admin")}
+          </button>
+          <div className="language-toggle" aria-label="Language">
+            <button className={language === "sv" ? "active" : ""} onClick={() => setLanguage("sv")}>
+              SV
+            </button>
+            <button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")}>
+              EN
+            </button>
+          </div>
+        </div>
       </header>
 
       <main>
-        {path === "/" && <HomePage />}
-        {path === "/theses" && <ThesesPage />}
-        {path === "/research-areas" && <ResearchAreasPage />}
-        {researchAreaMatch && <ResearchAreasPage categoryId={researchAreaMatch[1]} />}
-        {path === "/references" && <ReferencesPage />}
-        {detailMatch && <ThesisDetail runningNumber={detailMatch[1]} />}
+        {isAdmin && <p className="admin-banner">{t("adminMode")}</p>}
+        {contentPath === "/" && <HomePage t={t} />}
+        {contentPath === "/theses" && <ThesesPage isAdmin={isAdmin} t={t} />}
+        {contentPath === "/research-areas" && <ResearchAreasPage isAdmin={isAdmin} t={t} />}
+        {researchAreaMatch && <ResearchAreasPage categoryId={researchAreaMatch[1]} isAdmin={isAdmin} t={t} />}
+        {contentPath === "/references" && <ReferencesPage t={t} />}
+        {detailMatch && <ThesisDetail isAdmin={isAdmin} runningNumber={detailMatch[1]} t={t} />}
         {filteredMatch && (
           <FilteredThesesPage
             filterType={filteredMatch[1]}
             filterValue={decodeURIComponent(filteredMatch[2])}
+            isAdmin={isAdmin}
+            t={t}
           />
         )}
       </main>
@@ -132,7 +356,7 @@ function App() {
   );
 }
 
-function HomePage() {
+function HomePage({ t }) {
   const overview = useApi("/stats/overview");
   const byUniversity = useApi("/stats/by-university");
   const byProfession = useApi("/stats/by-profession");
@@ -145,22 +369,22 @@ function HomePage() {
   );
   const stats = {
     byUniversity: {
-      title: "By university",
+      title: t("byUniversity"),
       getPath: (row) => `/university/${encodePathValue(row.label)}`,
       ...byUniversity,
     },
     byProfession: {
-      title: "By profession",
+      title: t("byProfession"),
       getPath: (row) => `/profession/${encodePathValue(row.label)}`,
       ...byProfession,
     },
     byCategory: {
-      title: "By category",
+      title: t("byCategory"),
       getPath: (row) => `/category/${encodePathValue(categoryIdsByName[row.label] ?? row.label)}`,
       ...byCategory,
     },
     byYear: {
-      title: "By year",
+      title: t("byYear"),
       getPath: (row) => `/year/${encodePathValue(row.label)}`,
       sortRows: (rows) => [...rows].sort((a, b) => Number(b.label) - Number(a.label)),
       scrollable: true,
@@ -171,21 +395,18 @@ function HomePage() {
   return (
     <>
       <section className="intro">
-        <p className="eyebrow">Research catalogue</p>
-        <h1>Swedish prehospital doctoral theses</h1>
-        <p>
-          A concise overview of dissertations, institutions, professions, and research
-          categories represented in the catalogue.
-        </p>
+        <p className="eyebrow">{t("catalogueEyebrow")}</p>
+        <h1>{t("homeTitle")}</h1>
+        <p>{t("homeIntro")}</p>
       </section>
 
       <section className="overview-grid" aria-label="Overview statistics">
-        {overview.loading && <Status message="Loading overview..." />}
-        {overview.error && <Status message="Could not load overview." />}
+        {overview.loading && <Status message={t("loadingOverview")} />}
+        {overview.error && <Status message={t("couldNotLoadOverview")} />}
         {overview.data &&
-          overviewFields.map(([key, label]) => (
+          overviewFields.map(([key, labelKey]) => (
             <article className="stat-card" key={key}>
-              <span>{label}</span>
+              <span>{t(labelKey)}</span>
               <strong>{overview.data[key] ?? "-"}</strong>
             </article>
           ))}
@@ -193,14 +414,14 @@ function HomePage() {
 
       <section className="stats-grid" aria-label="Descriptive statistics">
         {statsConfig.map(([key]) => (
-          <StatsPanel key={key} state={stats[key]} />
+          <StatsPanel key={key} state={stats[key]} t={t} />
         ))}
       </section>
     </>
   );
 }
 
-function StatsPanel({ state }) {
+function StatsPanel({ state, t }) {
   const rows = state.sortRows ? state.sortRows(state.data ?? []) : state.data ?? [];
   const max = Math.max(...rows.map((row) => row.count), 1);
   const visibleRows = state.scrollable ? rows : rows.slice(0, 10);
@@ -208,8 +429,8 @@ function StatsPanel({ state }) {
   return (
     <article className={`panel ${state.scrollable ? "panel-scroll" : ""}`}>
       <h2>{state.title}</h2>
-      {state.loading && <Status message="Loading..." />}
-      {state.error && <Status message="Could not load data." />}
+      {state.loading && <Status message={t("loading")} />}
+      {state.error && <Status message={t("couldNotLoadData")} />}
       {!state.loading && !state.error && (
         <ol className="rank-list">
           {visibleRows.map((row) => (
@@ -231,7 +452,7 @@ function StatsPanel({ state }) {
   );
 }
 
-function ThesesPage() {
+function ThesesPage({ isAdmin, t }) {
   const { data: theses, loading, error } = useApi("/theses");
   const { data: categories } = useApi("/categories");
   const [filters, setFilters] = useState({
@@ -271,51 +492,55 @@ function ThesesPage() {
     <section className="page-section">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Catalogue</p>
-          <h1>All theses</h1>
+          <p className="eyebrow">{t("catalogueEyebrow")}</p>
+          <h1>{t("allTheses")}</h1>
         </div>
-        <span className="result-count">{filtered.length} results</span>
+        <span className="result-count">{filtered.length} {t("results")}</span>
       </div>
 
-      {loading && <Status message="Loading theses..." />}
-      {error && <Status message="Could not load theses." />}
+      {loading && <Status message={t("loadingTheses")} />}
+      {error && <Status message={t("couldNotLoadTheses")} />}
       {theses && (
         <>
           <div className="filters" aria-label="Thesis filters">
             <SelectFilter
-              label="Category"
+              label={t("category")}
               value={filters.category}
               options={options.category}
               onChange={(value) => setFilters((current) => ({ ...current, category: value }))}
+              t={t}
             />
             <SelectFilter
-              label="University"
+              label={t("university")}
               value={filters.university}
               options={options.university}
               onChange={(value) => setFilters((current) => ({ ...current, university: value }))}
+              t={t}
             />
             <SelectFilter
-              label="Profession"
+              label={t("profession")}
               value={filters.profession}
               options={options.profession}
               onChange={(value) => setFilters((current) => ({ ...current, profession: value }))}
+              t={t}
             />
             <SelectFilter
-              label="Year"
+              label={t("year")}
               value={filters.year}
               options={options.year}
               onChange={(value) => setFilters((current) => ({ ...current, year: value }))}
+              t={t}
             />
           </div>
 
-          <ThesisList theses={filtered} />
+          <ThesisList isAdmin={isAdmin} theses={filtered} />
         </>
       )}
     </section>
   );
 }
 
-function FilteredThesesPage({ filterType, filterValue }) {
+function FilteredThesesPage({ filterType, filterValue, isAdmin, t }) {
   const { data: theses, loading, error } = useApi("/theses");
   const { data: categories } = useApi("/categories");
   const categoryNames = useMemo(() => makeNameMap(categories), [categories]);
@@ -329,10 +554,10 @@ function FilteredThesesPage({ filterType, filterValue }) {
   }, [categories, filterType, filterValue]);
   const heading = filterType === "category" ? categoryNames[categoryId] ?? filterValue : filterValue;
   const label = {
-    year: "Year",
-    university: "University",
-    profession: "Profession",
-    category: "Category",
+    year: t("year"),
+    university: t("university"),
+    profession: t("profession"),
+    category: t("category"),
   }[filterType];
 
   const filtered = useMemo(() => {
@@ -347,8 +572,8 @@ function FilteredThesesPage({ filterType, filterValue }) {
 
   return (
     <section className="page-section">
-      <button className="back-button" onClick={() => navigate("/theses")}>
-        Back to all theses
+      <button className="back-button" onClick={() => navigate("/theses", isAdmin)}>
+        {t("backToAllTheses")}
       </button>
 
       <div className="section-heading filtered-heading">
@@ -356,24 +581,25 @@ function FilteredThesesPage({ filterType, filterValue }) {
           <p className="eyebrow">{label}</p>
           <h1>{heading}</h1>
         </div>
-        <span className="result-count">{filtered.length} results</span>
+        <span className="result-count">{filtered.length} {t("results")}</span>
       </div>
 
-      {loading && <Status message="Loading theses..." />}
-      {error && <Status message="Could not load theses." />}
-      {theses && <ThesisList theses={filtered} />}
+      {loading && <Status message={t("loadingTheses")} />}
+      {error && <Status message={t("couldNotLoadTheses")} />}
+      {theses && <ThesisList isAdmin={isAdmin} theses={filtered} />}
     </section>
   );
 }
 
-function ThesisList({ theses }) {
+function ThesisList({ isAdmin = false, theses }) {
+  const sortedTheses = useMemo(() => sortTheses(theses), [theses]);
   return (
     <div className="thesis-list">
-      {theses.map((thesis) => (
+      {sortedTheses.map((thesis) => (
         <button
           className="thesis-row"
           key={thesis.running_number}
-          onClick={() => navigate(`/theses/${thesis.running_number}`)}
+          onClick={() => navigate(`/theses/${thesis.running_number}`, isAdmin)}
         >
           <span className="thesis-number">#{thesis.running_number}</span>
           <span className="thesis-main">
@@ -389,7 +615,7 @@ function ThesisList({ theses }) {
   );
 }
 
-function ResearchAreasPage({ categoryId }) {
+function ResearchAreasPage({ categoryId, isAdmin, t }) {
   const endpoint = categoryId ? `/research-areas/${categoryId}` : "/research-areas";
   const { data, loading, error } = useApi(endpoint);
   const { data: theses } = useApi("/theses");
@@ -405,21 +631,21 @@ function ResearchAreasPage({ categoryId }) {
   return (
     <section className="page-section research-page">
       {categoryId && (
-        <button className="back-button" onClick={() => navigate("/research-areas")}>
-          Alla forskningsområden
+        <button className="back-button" onClick={() => navigate("/research-areas", isAdmin)}>
+          {t("allResearchAreas")}
         </button>
       )}
 
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Rapportens tematisering</p>
-          <h1>Forskningsområden</h1>
+          <p className="eyebrow">{t("reportThemes")}</p>
+          <h1>{t("researchAreas")}</h1>
         </div>
-        {areas.length > 0 && <span className="result-count">{areas.length} områden</span>}
+        {areas.length > 0 && <span className="result-count">{areas.length} {t("researchAreasCount")}</span>}
       </div>
 
-      {loading && <Status message="Loading research areas..." />}
-      {error && <Status message="Could not load research areas." />}
+      {loading && <Status message={t("loadingResearchAreas")} />}
+      {error && <Status message={t("couldNotLoadResearchAreas")} />}
       {!loading && !error && (
         <div className="research-area-list">
           {areas.map((area) => (
@@ -427,7 +653,9 @@ function ResearchAreasPage({ categoryId }) {
               key={area.id}
               area={area}
               authorLinks={authorLinks}
+              isAdmin={isAdmin}
               singleCategory={Boolean(categoryId)}
+              t={t}
             />
           ))}
         </div>
@@ -436,23 +664,23 @@ function ResearchAreasPage({ categoryId }) {
   );
 }
 
-function ResearchAreaSection({ area, authorLinks, singleCategory }) {
+function ResearchAreaSection({ area, authorLinks, isAdmin, singleCategory, t }) {
   return (
     <article className="research-area" id={`category-${area.id}`}>
       <div className="research-area-heading">
         <div>
-          <p className="eyebrow">Huvudkategori {area.id}</p>
+          <p className="eyebrow">{t("mainCategory")} {area.id}</p>
           <h2>{area.name}</h2>
         </div>
         {!singleCategory && (
-          <button className="text-link-button" onClick={() => navigate(`/research-areas/${area.id}`)}>
-            Visa området
+          <button className="text-link-button" onClick={() => navigate(`/research-areas/${area.id}`, isAdmin)}>
+            {t("showArea")}
           </button>
         )}
       </div>
 
       {area.narrative_text && (
-        <NarrativeText authorLinks={authorLinks} collapsible linkCitations text={area.narrative_text} />
+        <NarrativeText authorLinks={authorLinks} collapsible linkCitations t={t} text={area.narrative_text} />
       )}
 
       {area.subcategories.length > 0 && (
@@ -461,7 +689,9 @@ function ResearchAreaSection({ area, authorLinks, singleCategory }) {
             <SubcategoryCard
               key={subcategory.id}
               authorLinks={authorLinks}
+              isAdmin={isAdmin}
               subcategory={subcategory}
+              t={t}
             />
           ))}
         </div>
@@ -470,14 +700,14 @@ function ResearchAreaSection({ area, authorLinks, singleCategory }) {
   );
 }
 
-function SubcategoryCard({ authorLinks, subcategory }) {
+function SubcategoryCard({ authorLinks, isAdmin, subcategory, t }) {
   const [tab, setTab] = useState("overview");
 
   return (
     <article className="subcategory-card" id={`subcategory-${subcategory.id}`}>
       <div className="subcategory-heading">
         <div>
-          <p className="eyebrow">Subkategori {subcategory.id}</p>
+          <p className="eyebrow">{t("subcategoryLabel")} {subcategory.id}</p>
           <h3>{subcategory.name}</h3>
         </div>
       </div>
@@ -488,21 +718,21 @@ function SubcategoryCard({ authorLinks, subcategory }) {
           onClick={() => setTab("overview")}
           type="button"
         >
-          Översikt
+          {t("overviewTab")}
         </button>
         <button
           className={tab === "theses" ? "active" : ""}
           onClick={() => setTab("theses")}
           type="button"
         >
-          Avhandlingar
+          {t("theses")}
         </button>
         <button
           className={tab === "publications" ? "active" : ""}
           onClick={() => setTab("publications")}
           type="button"
         >
-          Publikationer
+          {t("publications")}
         </button>
       </div>
 
@@ -513,32 +743,33 @@ function SubcategoryCard({ authorLinks, subcategory }) {
               authorLinks={authorLinks}
               collapsible
               linkCitations
+              t={t}
               text={subcategory.narrative_text}
             />
           ) : (
-            <Status message="Ingen narrativ text importerad för denna subkategori." />
+            <Status message={t("noNarrative")} />
           )}
         </div>
       )}
       {tab === "theses" && (
         <div className="tab-panel">
           {subcategory.theses.length > 0 ? (
-            <ThesisList theses={subcategory.theses} />
+            <ThesisList isAdmin={isAdmin} theses={subcategory.theses} />
           ) : (
-            <Status message="Inga avhandlingar är kopplade till denna subkategori." />
+            <Status message={t("noLinkedTheses")} />
           )}
         </div>
       )}
       {tab === "publications" && (
         <div className="tab-panel">
-          <p className="placeholder-text">Publikationer läggs till i en senare version.</p>
+          <p className="placeholder-text">{t("publicationsLater")}</p>
         </div>
       )}
     </article>
   );
 }
 
-function ReferencesPage() {
+function ReferencesPage({ t }) {
   const { data: references, loading, error } = useApi("/references");
 
   useEffect(() => {
@@ -551,14 +782,14 @@ function ReferencesPage() {
     <section className="page-section references-page">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Rapportens källor</p>
-          <h1>Referenser</h1>
+          <p className="eyebrow">{t("reportSources")}</p>
+          <h1>{t("references")}</h1>
         </div>
-        {references && <span className="result-count">{references.length} referenser</span>}
+        {references && <span className="result-count">{references.length} {t("referencesCount")}</span>}
       </div>
 
-      {loading && <Status message="Loading references..." />}
-      {error && <Status message="Could not load references." />}
+      {loading && <Status message={t("loadingReferences")} />}
+      {error && <Status message={t("couldNotLoadReferences")} />}
       {references && (
         <ol className="reference-list">
           {references.map((reference) => (
@@ -577,6 +808,7 @@ function NarrativeText({
   authorLinks = [],
   collapsible = false,
   linkCitations = false,
+  t = (key) => translations.sv[key] ?? key,
   text,
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -592,14 +824,14 @@ function NarrativeText({
       ))}
       {collapsible && paragraphs.length > 1 && (
         <button className="text-link-button narrative-toggle" onClick={() => setExpanded(!expanded)}>
-          {expanded ? "Visa mindre" : "Visa mer"}
+          {expanded ? t("showLess") : t("showMore")}
         </button>
       )}
     </div>
   );
 }
 
-function ThesisDetail({ runningNumber }) {
+function ThesisDetail({ isAdmin, runningNumber, t }) {
   const thesisRequest = useApi(`/theses/${runningNumber}`);
   const [savedThesis, setSavedThesis] = useState(null);
   const [paperReload, setPaperReload] = useState(0);
@@ -620,40 +852,40 @@ function ThesisDetail({ runningNumber }) {
 
   return (
     <section className="page-section detail-section">
-      <button className="back-button" onClick={() => navigate("/theses")}>
-        Back to theses
+      <button className="back-button" onClick={() => navigate("/theses", isAdmin)}>
+        {t("backToTheses")}
       </button>
 
-      {thesisRequest.loading && <Status message="Loading thesis..." />}
-      {thesisRequest.error && <Status message="Could not load thesis." />}
+      {thesisRequest.loading && <Status message={t("loadingTheses")} />}
+      {thesisRequest.error && <Status message={t("couldNotLoadTheses")} />}
       {thesis && (
         <article className="detail">
-          <p className="eyebrow">Thesis #{thesis.running_number}</p>
+          <p className="eyebrow">{t("theses")} #{thesis.running_number}</p>
           <h1>{thesis.title}</h1>
           <dl>
             <div>
-              <dt>Author</dt>
+              <dt>{t("author")}</dt>
               <dd>{thesis.author}</dd>
             </div>
             <div>
-              <dt>Profession</dt>
+              <dt>{t("profession")}</dt>
               <dd>{thesis.profession || "-"}</dd>
             </div>
             <div>
-              <dt>University</dt>
+              <dt>{t("university")}</dt>
               <dd>{thesis.university || "-"}</dd>
             </div>
             <div>
-              <dt>Year</dt>
+              <dt>{t("year")}</dt>
               <dd>{thesis.year || "-"}</dd>
             </div>
             <div>
-              <dt>Category</dt>
+              <dt>{t("category")}</dt>
               <dd>
                 {thesis.category_id ? (
                   <button
                     className="detail-link"
-                    onClick={() => navigate(`/research-areas/${thesis.category_id}`)}
+                    onClick={() => navigate(`/research-areas/${thesis.category_id}`, isAdmin)}
                   >
                     {categoryNames[thesis.category_id] || thesis.category_id}
                   </button>
@@ -663,14 +895,15 @@ function ThesisDetail({ runningNumber }) {
               </dd>
             </div>
             <div>
-              <dt>Subcategory</dt>
+              <dt>{t("subcategory")}</dt>
               <dd>
                 {thesis.subcategory_id ? (
                   <button
                     className="detail-link"
                     onClick={() =>
                       navigate(
-                        `/research-areas/${thesis.subcategory_id[0]}#subcategory-${thesis.subcategory_id}`
+                        `/research-areas/${thesis.subcategory_id[0]}#subcategory-${thesis.subcategory_id}`,
+                        isAdmin
                       )
                     }
                   >
@@ -684,17 +917,17 @@ function ThesisDetail({ runningNumber }) {
           </dl>
 
           <section className="digital-metadata">
-            <h2>Digital avhandling</h2>
+            <h2>{t("digitalThesis")}</h2>
             {!hasDigitalMetadata && (
-              <p className="placeholder-text">Digital metadata has not been added yet.</p>
+              <p className="placeholder-text">{t("noDigitalMetadata")}</p>
             )}
 
             <div className="metadata-block">
-              <h3>Abstrakt</h3>
+              <h3>{t("abstract")}</h3>
               {thesis.abstract ? (
-                <NarrativeText text={thesis.abstract} />
+                <NarrativeText t={t} text={thesis.abstract} />
               ) : (
-                <p className="placeholder-text">Digital metadata has not been added yet.</p>
+                <p className="placeholder-text">{t("noDigitalMetadata")}</p>
               )}
             </div>
 
@@ -702,10 +935,10 @@ function ThesisDetail({ runningNumber }) {
               <dl className="metadata-list">
                 {thesis.dissertation_url && (
                   <div>
-                    <dt>Dissertation URL</dt>
+                    <dt>{t("dissertationUrl")}</dt>
                     <dd>
                       <a href={thesis.dissertation_url} target="_blank" rel="noreferrer">
-                        Open dissertation record
+                        {t("openDissertationRecord")}
                       </a>
                     </dd>
                   </div>
@@ -715,7 +948,7 @@ function ThesisDetail({ runningNumber }) {
                     <dt>PDF</dt>
                     <dd>
                       <a href={thesis.pdf_url} target="_blank" rel="noreferrer">
-                        Open PDF
+                        {t("openPdf")}
                       </a>
                     </dd>
                   </div>
@@ -740,11 +973,11 @@ function ThesisDetail({ runningNumber }) {
             )}
 
             <div className="metadata-block">
-              <h3>Ingående artiklar</h3>
-              {papers.loading && <Status message="Loading included papers..." />}
-              {papers.error && <Status message="Could not load included papers." />}
+              <h3>{t("includedPapers")}</h3>
+              {papers.loading && <Status message={t("loadingPapers")} />}
+              {papers.error && <Status message={t("couldNotLoadPapers")} />}
               {papers.data && papers.data.length === 0 && (
-                <p className="placeholder-text">Digital metadata has not been added yet.</p>
+                <p className="placeholder-text">{t("noDigitalMetadata")}</p>
               )}
               {papers.data && papers.data.length > 0 && (
                 <div className="paper-list">
@@ -764,25 +997,32 @@ function ThesisDetail({ runningNumber }) {
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
-                      {paper.abstract && <NarrativeText text={paper.abstract} />}
+                      {paper.abstract && <NarrativeText t={t} text={paper.abstract} />}
                     </article>
                   ))}
                 </div>
               )}
             </div>
 
-            <MetadataEditForm
-              onSaved={setSavedThesis}
-              thesis={thesis}
-            />
-            <MetadataLookup
-              onSaved={setSavedThesis}
-              runningNumber={runningNumber}
-            />
-            <IncludedPaperForm
-              onSaved={() => setPaperReload((current) => current + 1)}
-              runningNumber={runningNumber}
-            />
+            {isAdmin && (
+              <>
+                <MetadataEditForm
+                  onSaved={setSavedThesis}
+                  t={t}
+                  thesis={thesis}
+                />
+                <MetadataLookup
+                  onSaved={setSavedThesis}
+                  runningNumber={runningNumber}
+                  t={t}
+                />
+                <IncludedPaperForm
+                  onSaved={() => setPaperReload((current) => current + 1)}
+                  runningNumber={runningNumber}
+                  t={t}
+                />
+              </>
+            )}
           </section>
         </article>
       )}
@@ -790,7 +1030,7 @@ function ThesisDetail({ runningNumber }) {
   );
 }
 
-function MetadataEditForm({ onSaved, thesis }) {
+function MetadataEditForm({ onSaved, t, thesis }) {
   const [form, setForm] = useState(metadataFormFromThesis(thesis));
   const [status, setStatus] = useState("");
 
@@ -800,21 +1040,21 @@ function MetadataEditForm({ onSaved, thesis }) {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    setStatus("Sparar...");
+    setStatus(t("saving"));
     try {
       const saved = await sendJson(`/theses/${thesis.running_number}`, "PATCH", form);
       onSaved(saved);
-      setStatus("Sparat.");
+      setStatus(t("saved"));
     } catch {
-      setStatus("Kunde inte spara metadata.");
+      setStatus(t("saveFailed"));
     }
   }
 
   return (
     <form className="metadata-form" onSubmit={handleSubmit}>
-      <h3>Edit metadata</h3>
+      <h3>{t("editMetadata")}</h3>
       <label>
-        <span>Abstrakt</span>
+        <span>{t("abstract")}</span>
         <textarea
           rows="6"
           value={form.abstract}
@@ -823,7 +1063,7 @@ function MetadataEditForm({ onSaved, thesis }) {
       </label>
       <div className="metadata-form-grid">
         <label>
-          <span>Dissertation URL</span>
+          <span>{t("dissertationUrl")}</span>
           <input
             value={form.dissertation_url}
             onChange={(event) =>
@@ -854,43 +1094,43 @@ function MetadataEditForm({ onSaved, thesis }) {
         </label>
       </div>
       <div className="form-actions">
-        <button className="primary-button" type="submit">Spara metadata</button>
+        <button className="primary-button" type="submit">{t("saveMetadata")}</button>
         {status && <span className="form-status">{status}</span>}
       </div>
     </form>
   );
 }
 
-function MetadataLookup({ onSaved, runningNumber }) {
+function MetadataLookup({ onSaved, runningNumber, t }) {
   const [lookup, setLookup] = useState({ candidates: [], search: null });
   const [lookupUrl, setLookupUrl] = useState("");
   const [status, setStatus] = useState("");
 
   async function handleLookup() {
-    setStatus("Söker...");
+    setStatus(t("searching"));
     try {
       const result = await sendJson(`/theses/${runningNumber}/lookup-metadata`, "POST", {});
       setLookup(result);
-      setStatus(result.candidates.length ? "" : "Inga kandidater hittades.");
+      setStatus(result.candidates.length ? "" : t("noCandidates"));
     } catch {
-      setStatus("Kunde inte söka metadata.");
+      setStatus(t("lookupFailed"));
     }
   }
 
   async function useCandidate(candidate) {
-    setStatus("Sparar kandidat...");
+    setStatus(t("savingCandidate"));
     try {
       const saved = await sendJson(`/theses/${runningNumber}`, "PATCH", candidateToMetadata(candidate));
       onSaved(saved);
-      setStatus("Kandidat sparad.");
+      setStatus(t("candidateSaved"));
     } catch {
-      setStatus("Kunde inte spara kandidat.");
+      setStatus(t("candidateSaveFailed"));
     }
   }
 
   async function handleUrlLookup(event) {
     event.preventDefault();
-    setStatus("Hämtar metadata från URL...");
+    setStatus(t("fetchingUrl"));
     try {
       const result = await sendJson("/metadata/lookup-url", "POST", { url: lookupUrl });
       setLookup({
@@ -900,7 +1140,7 @@ function MetadataLookup({ onSaved, runningNumber }) {
       });
       setStatus("");
     } catch {
-      setStatus("Kunde inte hämta metadata från URL.");
+      setStatus(t("urlLookupFailed"));
     }
   }
 
@@ -908,25 +1148,25 @@ function MetadataLookup({ onSaved, runningNumber }) {
     <section className="metadata-lookup">
       <div className="lookup-heading">
         <div>
-          <h3>Find digital metadata</h3>
-          <p className="placeholder-text">Candidates are never applied without approval.</p>
+          <h3>{t("findDigitalMetadata")}</h3>
+          <p className="placeholder-text">{t("candidatesManual")}</p>
         </div>
         <button className="primary-button" onClick={handleLookup} type="button">
-          Find digital metadata
+          {t("findDigitalMetadata")}
         </button>
       </div>
 
       <form className="lookup-url-form" onSubmit={handleUrlLookup}>
         <label>
-          <span>Lookup from URL</span>
+          <span>{t("lookupFromUrl")}</span>
           <input
-            placeholder="Paste a DiVA record URL"
+            placeholder={t("pasteDivaUrl")}
             value={lookupUrl}
             onChange={(event) => setLookupUrl(event.target.value)}
           />
         </label>
         <button className="secondary-button" type="submit">
-          Lookup URL
+          {t("lookupUrl")}
         </button>
       </form>
 
@@ -944,7 +1184,7 @@ function MetadataLookup({ onSaved, runningNumber }) {
         <div className="candidate-list">
           {lookup.candidates.map((candidate, index) => (
             <article className="candidate-card" key={`${candidate.source}-${index}`}>
-              <h4>{candidate.title || "Untitled candidate"}</h4>
+              <h4>{candidate.title || t("untitledCandidate")}</h4>
               <p className="paper-meta">
                 {[
                   candidate.author,
@@ -952,7 +1192,7 @@ function MetadataLookup({ onSaved, runningNumber }) {
                   candidate.year,
                   candidate.source,
                   candidate.source_host,
-                  `Confidence: ${candidate.confidence}`,
+                  `${t("confidence")}: ${candidate.confidence}`,
                 ]
                   .filter(Boolean)
                   .join(" · ")}
@@ -960,7 +1200,7 @@ function MetadataLookup({ onSaved, runningNumber }) {
               <dl className="metadata-list">
                 {candidate.dissertation_url && (
                   <div>
-                    <dt>Dissertation URL</dt>
+                    <dt>{t("dissertationUrl")}</dt>
                     <dd>{candidate.dissertation_url}</dd>
                   </div>
                 )}
@@ -983,9 +1223,9 @@ function MetadataLookup({ onSaved, runningNumber }) {
                   </div>
                 )}
               </dl>
-              {candidate.abstract && <NarrativeText text={candidate.abstract} />}
+              {candidate.abstract && <NarrativeText t={t} text={candidate.abstract} />}
               <button className="primary-button" onClick={() => useCandidate(candidate)} type="button">
-                Use this metadata
+                {t("useMetadata")}
               </button>
             </article>
           ))}
@@ -995,36 +1235,36 @@ function MetadataLookup({ onSaved, runningNumber }) {
   );
 }
 
-function IncludedPaperForm({ onSaved, runningNumber }) {
+function IncludedPaperForm({ onSaved, runningNumber, t }) {
   const [form, setForm] = useState(emptyPaperForm());
   const [status, setStatus] = useState("");
 
   async function handleSubmit(event) {
     event.preventDefault();
     if (!form.title.trim()) {
-      setStatus("Titel krävs.");
+      setStatus(t("titleRequired"));
       return;
     }
 
-    setStatus("Sparar...");
+    setStatus(t("saving"));
     try {
       await sendJson(`/theses/${runningNumber}/papers`, "POST", {
         ...form,
         year: form.year ? Number(form.year) : null,
       });
       setForm(emptyPaperForm());
-      setStatus("Artikel sparad.");
+      setStatus(t("paperSaved"));
       onSaved();
     } catch {
-      setStatus("Kunde inte spara artikel.");
+      setStatus(t("paperSaveFailed"));
     }
   }
 
   return (
     <form className="metadata-form" onSubmit={handleSubmit}>
-      <h3>Lägg till ingående artikel</h3>
+      <h3>{t("addIncludedPaper")}</h3>
       <label>
-        <span>Titel</span>
+        <span>{t("title")}</span>
         <input
           value={form.title}
           onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
@@ -1032,14 +1272,14 @@ function IncludedPaperForm({ onSaved, runningNumber }) {
       </label>
       <div className="metadata-form-grid">
         <label>
-          <span>Tidskrift</span>
+          <span>{t("journal")}</span>
           <input
             value={form.journal}
             onChange={(event) => setForm((current) => ({ ...current, journal: event.target.value }))}
           />
         </label>
         <label>
-          <span>År</span>
+          <span>{t("year")}</span>
           <input
             inputMode="numeric"
             value={form.year}
@@ -1071,7 +1311,7 @@ function IncludedPaperForm({ onSaved, runningNumber }) {
         />
       </label>
       <label>
-        <span>Abstrakt</span>
+        <span>{t("abstract")}</span>
         <textarea
           rows="4"
           value={form.abstract}
@@ -1079,19 +1319,19 @@ function IncludedPaperForm({ onSaved, runningNumber }) {
         />
       </label>
       <div className="form-actions">
-        <button className="primary-button" type="submit">Spara artikel</button>
+        <button className="primary-button" type="submit">{t("savePaper")}</button>
         {status && <span className="form-status">{status}</span>}
       </div>
     </form>
   );
 }
 
-function SelectFilter({ label, value, options, onChange }) {
+function SelectFilter({ label, value, options, onChange, t }) {
   return (
     <label>
       <span>{label}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="">All</option>
+        <option value="">{t("all")}</option>
         {options.map((option) => (
           <option key={option.value ?? option} value={option.value ?? option}>
             {option.label ?? option}
@@ -1112,6 +1352,15 @@ function uniqueValues(values) {
 
 function matchesFilter(value, filter) {
   return !filter || String(value) === String(filter);
+}
+
+function sortTheses(theses) {
+  return [...(theses ?? [])].sort((a, b) => {
+    const yearA = Number(a.year) || 0;
+    const yearB = Number(b.year) || 0;
+    if (yearA !== yearB) return yearB - yearA;
+    return Number(b.running_number) - Number(a.running_number);
+  });
 }
 
 function makeNameMap(rows) {

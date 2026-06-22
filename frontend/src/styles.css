@@ -56,6 +56,7 @@ nav {
 }
 
 nav button,
+.header-actions button,
 .back-button,
 .primary-button,
 .secondary-button {
@@ -68,12 +69,41 @@ nav button,
 
 nav button.active,
 nav button:hover,
+.header-actions button.active,
+.header-actions button:hover,
 .back-button:hover,
 .tab-list button.active,
 .tab-list button:hover {
   background: #233348;
   border-color: #233348;
   color: #ffffff;
+}
+
+.header-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.language-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.language-toggle button {
+  min-width: 44px;
+  padding-inline: 9px;
+}
+
+.admin-banner {
+  background: #fff8e8;
+  border: 1px solid #e4c77f;
+  border-radius: 6px;
+  color: #6f3d2e;
+  display: inline-block;
+  font-weight: 700;
+  margin: 0 0 18px;
+  padding: 6px 10px;
 }
 
 .primary-button {
@@ -706,6 +736,11 @@ a:hover {
   .subcategory-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .site-header nav,
+  .header-actions {
+    flex-wrap: wrap;
   }
 
   .overview-grid,

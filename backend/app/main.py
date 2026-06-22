@@ -42,7 +42,7 @@ def root():
 
 @app.get("/theses")
 def get_theses(db: Session = Depends(get_db)):
-    theses = db.query(Thesis).order_by(Thesis.running_number).all()
+    theses = db.query(Thesis).order_by(Thesis.year.desc(), Thesis.running_number.desc()).all()
     return theses
 
 

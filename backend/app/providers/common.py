@@ -27,6 +27,7 @@ FIELD_NAMES = (
     "abstract",
     "confidence",
     "source",
+    "source_host",
 )
 
 
@@ -97,6 +98,10 @@ def score_candidate(candidate: dict[str, Any], query: SearchQuery) -> float:
         score += 0.02
     if candidate.get("abstract"):
         score += 0.02
+    if candidate.get("source") == "DiVA" and title_score >= 0.9 and author_score >= 0.8:
+        score += 0.08
+    if candidate.get("source") == "DiVA" and query_year and candidate_year == query_year:
+        score += 0.04
 
     return min(score, 1.0)
 
@@ -110,7 +115,12 @@ def similarity(left: Any, right: Any) -> float:
         shorter = min(len(left_text), len(right_text))
         longer = max(len(left_text), len(right_text))
         return max(0.75, shorter / longer)
-    return SequenceMatcher(None, left_text, right_text).ratio()
+    sorted_left = " ".join(sorted(left_text.split()))
+    sorted_right = " ".join(sorted(right_text.split()))
+    return max(
+        SequenceMatcher(None, left_text, right_text).ratio(),
+        SequenceMatcher(None, sorted_left, sorted_right).ratio(),
+    )
 
 
 def comparable_text(value: Any) -> str:
@@ -186,6 +196,11 @@ def extract_meta(html: str) -> MetaTagParser:
 def first_value(data: dict[str, Any], names: list[str]) -> Any:
     for name in names:
         value = data.get(name)
+        if value:
+            return value
+    lower_data = {key.lower(): value for key, value in data.items()}
+    for name in names:
+        value = lower_data.get(name.lower())
         if value:
             return value
     return None

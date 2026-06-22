@@ -77,6 +77,7 @@ def lookup_metadata_candidates(thesis: Thesis):
             errors.append({"source": provider.SOURCE, "error": str(exc)})
 
     candidates = deduplicate_candidates(candidates)
+    candidates = apply_diva_preference(candidates)
     candidates.sort(
         key=lambda candidate: (
             candidate.get("confidence") or 0,
@@ -89,6 +90,14 @@ def lookup_metadata_candidates(thesis: Thesis):
         "search": search_response,
         "candidates": candidates,
         "errors": errors,
+    }
+
+
+def lookup_metadata_url(url: str):
+    candidate = diva.lookup_url(url)
+    return {
+        "candidate": candidate,
+        "candidates": [candidate],
     }
 
 
@@ -122,3 +131,20 @@ def source_priority(source):
         "Current local metadata": 4,
     }
     return priorities.get(source, 0)
+
+
+def apply_diva_preference(candidates):
+    has_diva_record = any(
+        candidate.get("source") == "DiVA" and candidate.get("confidence", 0) >= 0.78
+        for candidate in candidates
+    )
+    if not has_diva_record:
+        return candidates
+
+    adjusted = []
+    for candidate in candidates:
+        if candidate.get("source") != "DiVA":
+            candidate = candidate.copy()
+            candidate["confidence"] = round(min(candidate.get("confidence", 0), 0.74), 3)
+        adjusted.append(candidate)
+    return adjusted

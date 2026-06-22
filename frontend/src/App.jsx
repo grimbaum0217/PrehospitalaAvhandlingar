@@ -863,6 +863,7 @@ function MetadataEditForm({ onSaved, thesis }) {
 
 function MetadataLookup({ onSaved, runningNumber }) {
   const [lookup, setLookup] = useState({ candidates: [], search: null });
+  const [lookupUrl, setLookupUrl] = useState("");
   const [status, setStatus] = useState("");
 
   async function handleLookup() {
@@ -887,6 +888,22 @@ function MetadataLookup({ onSaved, runningNumber }) {
     }
   }
 
+  async function handleUrlLookup(event) {
+    event.preventDefault();
+    setStatus("Hämtar metadata från URL...");
+    try {
+      const result = await sendJson("/metadata/lookup-url", "POST", { url: lookupUrl });
+      setLookup({
+        candidates: result.candidates ?? [result.candidate].filter(Boolean),
+        search: { url: lookupUrl },
+        errors: [],
+      });
+      setStatus("");
+    } catch {
+      setStatus("Kunde inte hämta metadata från URL.");
+    }
+  }
+
   return (
     <section className="metadata-lookup">
       <div className="lookup-heading">
@@ -898,6 +915,20 @@ function MetadataLookup({ onSaved, runningNumber }) {
           Find digital metadata
         </button>
       </div>
+
+      <form className="lookup-url-form" onSubmit={handleUrlLookup}>
+        <label>
+          <span>Lookup from URL</span>
+          <input
+            placeholder="Paste a DiVA record URL"
+            value={lookupUrl}
+            onChange={(event) => setLookupUrl(event.target.value)}
+          />
+        </label>
+        <button className="secondary-button" type="submit">
+          Lookup URL
+        </button>
+      </form>
 
       {status && <p className="status">{status}</p>}
       {lookup.errors?.length > 0 && (
@@ -920,6 +951,7 @@ function MetadataLookup({ onSaved, runningNumber }) {
                   candidate.university,
                   candidate.year,
                   candidate.source,
+                  candidate.source_host,
                   `Confidence: ${candidate.confidence}`,
                 ]
                   .filter(Boolean)

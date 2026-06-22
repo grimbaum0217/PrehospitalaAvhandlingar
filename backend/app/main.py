@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Thesis, Category, Subcategory, IncludedPaper, Reference
-from app.services.metadata_lookup import lookup_metadata_candidates
+from app.providers.common import MetadataError
+from app.services.metadata_lookup import lookup_metadata_candidates, lookup_metadata_url
 
 app = FastAPI(
     title="Prehospitala Avhandlingar",
@@ -80,6 +81,17 @@ def update_thesis_metadata(
 def lookup_thesis_metadata(running_number: int, db: Session = Depends(get_db)):
     thesis = get_thesis_or_404(running_number, db)
     return lookup_metadata_candidates(thesis)
+
+
+@app.post("/metadata/lookup-url")
+def lookup_metadata_from_url(payload: dict):
+    url = (payload.get("url") or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    try:
+        return lookup_metadata_url(url)
+    except MetadataError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def get_thesis_or_404(running_number: int, db: Session):

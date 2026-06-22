@@ -57,7 +57,8 @@ nav {
 
 nav button,
 .back-button,
-.primary-button {
+.primary-button,
+.secondary-button {
   background: transparent;
   border: 1px solid #cfc7ba;
   border-radius: 6px;
@@ -84,6 +85,10 @@ nav button:hover,
 .primary-button:hover {
   background: #172033;
   border-color: #172033;
+}
+
+.secondary-button:hover {
+  background: #f4f0e8;
 }
 
 main {
@@ -601,6 +606,31 @@ a:hover {
   justify-content: space-between;
 }
 
+.lookup-url-form {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 16px;
+}
+
+.lookup-url-form label {
+  color: #475467;
+  display: grid;
+  font-size: 0.9rem;
+  gap: 6px;
+}
+
+.lookup-url-form input {
+  background: #ffffff;
+  border: 1px solid #cfc7ba;
+  border-radius: 6px;
+  color: #1f2933;
+  font: inherit;
+  min-width: 0;
+  padding: 9px 10px;
+}
+
 .candidate-list {
   display: grid;
   gap: 14px;
@@ -683,7 +713,8 @@ a:hover {
   .filters,
   .detail dl,
   .metadata-list,
-  .metadata-form-grid {
+  .metadata-form-grid,
+  .lookup-url-form {
     grid-template-columns: 1fr;
   }
 

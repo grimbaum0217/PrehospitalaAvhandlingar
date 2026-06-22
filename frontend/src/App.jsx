@@ -42,6 +42,18 @@ async function fetchJson(path) {
   return response.json();
 }
 
+async function sendJson(path, method, body) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+  return response.json();
+}
+
 function useApi(path) {
   const [state, setState] = useState({ data: null, loading: true, error: "" });
 
@@ -93,6 +105,12 @@ function App() {
           >
             Forskningsområden
           </button>
+          <button
+            className={path === "/references" ? "active" : ""}
+            onClick={() => navigate("/references")}
+          >
+            Referenser
+          </button>
         </nav>
       </header>
 
@@ -101,6 +119,7 @@ function App() {
         {path === "/theses" && <ThesesPage />}
         {path === "/research-areas" && <ResearchAreasPage />}
         {researchAreaMatch && <ResearchAreasPage categoryId={researchAreaMatch[1]} />}
+        {path === "/references" && <ReferencesPage />}
         {detailMatch && <ThesisDetail runningNumber={detailMatch[1]} />}
         {filteredMatch && (
           <FilteredThesesPage
@@ -373,7 +392,9 @@ function ThesisList({ theses }) {
 function ResearchAreasPage({ categoryId }) {
   const endpoint = categoryId ? `/research-areas/${categoryId}` : "/research-areas";
   const { data, loading, error } = useApi(endpoint);
+  const { data: theses } = useApi("/theses");
   const areas = categoryId && data ? [data] : data ?? [];
+  const authorLinks = useMemo(() => makeAuthorLinks(theses), [theses]);
 
   useEffect(() => {
     if (!data || !window.location.hash) return;
@@ -402,7 +423,12 @@ function ResearchAreasPage({ categoryId }) {
       {!loading && !error && (
         <div className="research-area-list">
           {areas.map((area) => (
-            <ResearchAreaSection key={area.id} area={area} singleCategory={Boolean(categoryId)} />
+            <ResearchAreaSection
+              key={area.id}
+              area={area}
+              authorLinks={authorLinks}
+              singleCategory={Boolean(categoryId)}
+            />
           ))}
         </div>
       )}
@@ -410,7 +436,7 @@ function ResearchAreasPage({ categoryId }) {
   );
 }
 
-function ResearchAreaSection({ area, singleCategory }) {
+function ResearchAreaSection({ area, authorLinks, singleCategory }) {
   return (
     <article className="research-area" id={`category-${area.id}`}>
       <div className="research-area-heading">
@@ -425,12 +451,18 @@ function ResearchAreaSection({ area, singleCategory }) {
         )}
       </div>
 
-      {area.narrative_text && <NarrativeText text={area.narrative_text} />}
+      {area.narrative_text && (
+        <NarrativeText authorLinks={authorLinks} collapsible linkCitations text={area.narrative_text} />
+      )}
 
       {area.subcategories.length > 0 && (
         <div className="subcategory-list">
           {area.subcategories.map((subcategory) => (
-            <SubcategoryCard key={subcategory.id} subcategory={subcategory} />
+            <SubcategoryCard
+              key={subcategory.id}
+              authorLinks={authorLinks}
+              subcategory={subcategory}
+            />
           ))}
         </div>
       )}
@@ -438,7 +470,7 @@ function ResearchAreaSection({ area, singleCategory }) {
   );
 }
 
-function SubcategoryCard({ subcategory }) {
+function SubcategoryCard({ authorLinks, subcategory }) {
   const [tab, setTab] = useState("overview");
 
   return (
@@ -477,7 +509,12 @@ function SubcategoryCard({ subcategory }) {
       {tab === "overview" && (
         <div className="tab-panel">
           {subcategory.narrative_text ? (
-            <NarrativeText text={subcategory.narrative_text} />
+            <NarrativeText
+              authorLinks={authorLinks}
+              collapsible
+              linkCitations
+              text={subcategory.narrative_text}
+            />
           ) : (
             <Status message="Ingen narrativ text importerad för denna subkategori." />
           )}
@@ -501,23 +538,77 @@ function SubcategoryCard({ subcategory }) {
   );
 }
 
-function NarrativeText({ text }) {
+function ReferencesPage() {
+  const { data: references, loading, error } = useApi("/references");
+
+  useEffect(() => {
+    if (!references || !window.location.hash) return;
+    const element = document.querySelector(window.location.hash);
+    if (element) element.scrollIntoView({ block: "start" });
+  }, [references]);
+
+  return (
+    <section className="page-section references-page">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Rapportens källor</p>
+          <h1>Referenser</h1>
+        </div>
+        {references && <span className="result-count">{references.length} referenser</span>}
+      </div>
+
+      {loading && <Status message="Loading references..." />}
+      {error && <Status message="Could not load references." />}
+      {references && (
+        <ol className="reference-list">
+          {references.map((reference) => (
+            <li id={`ref-${reference.number}`} key={reference.id}>
+              <span className="reference-number">{reference.number}</span>
+              <p>{reference.text}</p>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function NarrativeText({
+  authorLinks = [],
+  collapsible = false,
+  linkCitations = false,
+  text,
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const paragraphs = text.split("\n\n");
+  const visibleParagraphs = collapsible && !expanded ? paragraphs.slice(0, 1) : paragraphs;
+
   return (
     <div className="narrative-text">
-      {text.split("\n\n").map((paragraph, index) => (
-        <p key={`${paragraph.slice(0, 24)}-${index}`}>{paragraph}</p>
+      {visibleParagraphs.map((paragraph, index) => (
+        <p key={`${paragraph.slice(0, 24)}-${index}`}>
+          {renderNarrativeParts(paragraph, { authorLinks, linkCitations })}
+        </p>
       ))}
+      {collapsible && paragraphs.length > 1 && (
+        <button className="text-link-button narrative-toggle" onClick={() => setExpanded(!expanded)}>
+          {expanded ? "Visa mindre" : "Visa mer"}
+        </button>
+      )}
     </div>
   );
 }
 
 function ThesisDetail({ runningNumber }) {
-  const { data: thesis, loading, error } = useApi(`/theses/${runningNumber}`);
-  const papers = useApi(`/theses/${runningNumber}/papers`);
+  const thesisRequest = useApi(`/theses/${runningNumber}`);
+  const [savedThesis, setSavedThesis] = useState(null);
+  const [paperReload, setPaperReload] = useState(0);
+  const papers = useApi(`/theses/${runningNumber}/papers?reload=${paperReload}`);
   const { data: categories } = useApi("/categories");
   const { data: subcategories } = useApi("/subcategories");
   const categoryNames = useMemo(() => makeNameMap(categories), [categories]);
   const subcategoryNames = useMemo(() => makeNameMap(subcategories), [subcategories]);
+  const thesis = savedThesis ?? thesisRequest.data;
   const hasDigitalMetadata = Boolean(
     thesis?.abstract ||
       thesis?.dissertation_url ||
@@ -533,8 +624,8 @@ function ThesisDetail({ runningNumber }) {
         Back to theses
       </button>
 
-      {loading && <Status message="Loading thesis..." />}
-      {error && <Status message="Could not load thesis." />}
+      {thesisRequest.loading && <Status message="Loading thesis..." />}
+      {thesisRequest.error && <Status message="Could not load thesis." />}
       {thesis && (
         <article className="detail">
           <p className="eyebrow">Thesis #{thesis.running_number}</p>
@@ -593,17 +684,19 @@ function ThesisDetail({ runningNumber }) {
           </dl>
 
           <section className="digital-metadata">
-            <h2>Digital metadata</h2>
+            <h2>Digital avhandling</h2>
             {!hasDigitalMetadata && (
               <p className="placeholder-text">Digital metadata has not been added yet.</p>
             )}
 
-            {thesis.abstract && (
-              <div className="metadata-block">
-                <h3>Abstract</h3>
+            <div className="metadata-block">
+              <h3>Abstrakt</h3>
+              {thesis.abstract ? (
                 <NarrativeText text={thesis.abstract} />
-              </div>
-            )}
+              ) : (
+                <p className="placeholder-text">Digital metadata has not been added yet.</p>
+              )}
+            </div>
 
             {(thesis.dissertation_url || thesis.pdf_url || thesis.doi || thesis.urn) && (
               <dl className="metadata-list">
@@ -646,11 +739,14 @@ function ThesisDetail({ runningNumber }) {
               </dl>
             )}
 
-            {papers.loading && <Status message="Loading included papers..." />}
-            {papers.error && <Status message="Could not load included papers." />}
-            {papers.data && papers.data.length > 0 && (
-              <div className="metadata-block">
-                <h3>Included papers</h3>
+            <div className="metadata-block">
+              <h3>Ingående artiklar</h3>
+              {papers.loading && <Status message="Loading included papers..." />}
+              {papers.error && <Status message="Could not load included papers." />}
+              {papers.data && papers.data.length === 0 && (
+                <p className="placeholder-text">Digital metadata has not been added yet.</p>
+              )}
+              {papers.data && papers.data.length > 0 && (
                 <div className="paper-list">
                   {papers.data.map((paper) => (
                     <article className="paper-item" key={paper.id}>
@@ -672,12 +768,272 @@ function ThesisDetail({ runningNumber }) {
                     </article>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+
+            <MetadataEditForm
+              onSaved={setSavedThesis}
+              thesis={thesis}
+            />
+            <MetadataLookup
+              onSaved={setSavedThesis}
+              runningNumber={runningNumber}
+            />
+            <IncludedPaperForm
+              onSaved={() => setPaperReload((current) => current + 1)}
+              runningNumber={runningNumber}
+            />
           </section>
         </article>
       )}
     </section>
+  );
+}
+
+function MetadataEditForm({ onSaved, thesis }) {
+  const [form, setForm] = useState(metadataFormFromThesis(thesis));
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    setForm(metadataFormFromThesis(thesis));
+  }, [thesis]);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setStatus("Sparar...");
+    try {
+      const saved = await sendJson(`/theses/${thesis.running_number}`, "PATCH", form);
+      onSaved(saved);
+      setStatus("Sparat.");
+    } catch {
+      setStatus("Kunde inte spara metadata.");
+    }
+  }
+
+  return (
+    <form className="metadata-form" onSubmit={handleSubmit}>
+      <h3>Edit metadata</h3>
+      <label>
+        <span>Abstrakt</span>
+        <textarea
+          rows="6"
+          value={form.abstract}
+          onChange={(event) => setForm((current) => ({ ...current, abstract: event.target.value }))}
+        />
+      </label>
+      <div className="metadata-form-grid">
+        <label>
+          <span>Dissertation URL</span>
+          <input
+            value={form.dissertation_url}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, dissertation_url: event.target.value }))
+            }
+          />
+        </label>
+        <label>
+          <span>PDF URL</span>
+          <input
+            value={form.pdf_url}
+            onChange={(event) => setForm((current) => ({ ...current, pdf_url: event.target.value }))}
+          />
+        </label>
+        <label>
+          <span>DOI</span>
+          <input
+            value={form.doi}
+            onChange={(event) => setForm((current) => ({ ...current, doi: event.target.value }))}
+          />
+        </label>
+        <label>
+          <span>URN</span>
+          <input
+            value={form.urn}
+            onChange={(event) => setForm((current) => ({ ...current, urn: event.target.value }))}
+          />
+        </label>
+      </div>
+      <div className="form-actions">
+        <button className="primary-button" type="submit">Spara metadata</button>
+        {status && <span className="form-status">{status}</span>}
+      </div>
+    </form>
+  );
+}
+
+function MetadataLookup({ onSaved, runningNumber }) {
+  const [lookup, setLookup] = useState({ candidates: [], search: null });
+  const [status, setStatus] = useState("");
+
+  async function handleLookup() {
+    setStatus("Söker...");
+    try {
+      const result = await sendJson(`/theses/${runningNumber}/lookup-metadata`, "POST", {});
+      setLookup(result);
+      setStatus(result.candidates.length ? "" : "Inga kandidater hittades.");
+    } catch {
+      setStatus("Kunde inte söka metadata.");
+    }
+  }
+
+  async function useCandidate(candidate) {
+    setStatus("Sparar kandidat...");
+    try {
+      const saved = await sendJson(`/theses/${runningNumber}`, "PATCH", candidateToMetadata(candidate));
+      onSaved(saved);
+      setStatus("Kandidat sparad.");
+    } catch {
+      setStatus("Kunde inte spara kandidat.");
+    }
+  }
+
+  return (
+    <section className="metadata-lookup">
+      <div className="lookup-heading">
+        <div>
+          <h3>Find digital metadata</h3>
+          <p className="placeholder-text">Candidates are never applied without approval.</p>
+        </div>
+        <button className="primary-button" onClick={handleLookup} type="button">
+          Find digital metadata
+        </button>
+      </div>
+
+      {status && <p className="status">{status}</p>}
+      {lookup.candidates.length > 0 && (
+        <div className="candidate-list">
+          {lookup.candidates.map((candidate, index) => (
+            <article className="candidate-card" key={`${candidate.source}-${index}`}>
+              <h4>{candidate.title || "Untitled candidate"}</h4>
+              <p className="paper-meta">
+                {[candidate.source, `Confidence: ${candidate.confidence}`].filter(Boolean).join(" · ")}
+              </p>
+              <dl className="metadata-list">
+                {candidate.dissertation_url && (
+                  <div>
+                    <dt>Dissertation URL</dt>
+                    <dd>{candidate.dissertation_url}</dd>
+                  </div>
+                )}
+                {candidate.pdf_url && (
+                  <div>
+                    <dt>PDF URL</dt>
+                    <dd>{candidate.pdf_url}</dd>
+                  </div>
+                )}
+                {candidate.doi && (
+                  <div>
+                    <dt>DOI</dt>
+                    <dd>{candidate.doi}</dd>
+                  </div>
+                )}
+                {candidate.urn && (
+                  <div>
+                    <dt>URN</dt>
+                    <dd>{candidate.urn}</dd>
+                  </div>
+                )}
+              </dl>
+              {candidate.abstract && <NarrativeText text={candidate.abstract} />}
+              <button className="primary-button" onClick={() => useCandidate(candidate)} type="button">
+                Use this metadata
+              </button>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function IncludedPaperForm({ onSaved, runningNumber }) {
+  const [form, setForm] = useState(emptyPaperForm());
+  const [status, setStatus] = useState("");
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!form.title.trim()) {
+      setStatus("Titel krävs.");
+      return;
+    }
+
+    setStatus("Sparar...");
+    try {
+      await sendJson(`/theses/${runningNumber}/papers`, "POST", {
+        ...form,
+        year: form.year ? Number(form.year) : null,
+      });
+      setForm(emptyPaperForm());
+      setStatus("Artikel sparad.");
+      onSaved();
+    } catch {
+      setStatus("Kunde inte spara artikel.");
+    }
+  }
+
+  return (
+    <form className="metadata-form" onSubmit={handleSubmit}>
+      <h3>Lägg till ingående artikel</h3>
+      <label>
+        <span>Titel</span>
+        <input
+          value={form.title}
+          onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+        />
+      </label>
+      <div className="metadata-form-grid">
+        <label>
+          <span>Tidskrift</span>
+          <input
+            value={form.journal}
+            onChange={(event) => setForm((current) => ({ ...current, journal: event.target.value }))}
+          />
+        </label>
+        <label>
+          <span>År</span>
+          <input
+            inputMode="numeric"
+            value={form.year}
+            onChange={(event) => setForm((current) => ({ ...current, year: event.target.value }))}
+          />
+        </label>
+        <label>
+          <span>DOI</span>
+          <input
+            value={form.doi}
+            onChange={(event) => setForm((current) => ({ ...current, doi: event.target.value }))}
+          />
+        </label>
+        <label>
+          <span>PubMed ID</span>
+          <input
+            value={form.pubmed_id}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, pubmed_id: event.target.value }))
+            }
+          />
+        </label>
+      </div>
+      <label>
+        <span>URL</span>
+        <input
+          value={form.url}
+          onChange={(event) => setForm((current) => ({ ...current, url: event.target.value }))}
+        />
+      </label>
+      <label>
+        <span>Abstrakt</span>
+        <textarea
+          rows="4"
+          value={form.abstract}
+          onChange={(event) => setForm((current) => ({ ...current, abstract: event.target.value }))}
+        />
+      </label>
+      <div className="form-actions">
+        <button className="primary-button" type="submit">Spara artikel</button>
+        {status && <span className="form-status">{status}</span>}
+      </div>
+    </form>
   );
 }
 
@@ -719,6 +1075,94 @@ function encodePathValue(value) {
 
 function doiUrl(doi) {
   return doi.startsWith("http") ? doi : `https://doi.org/${doi}`;
+}
+
+function metadataFormFromThesis(thesis) {
+  return {
+    abstract: thesis?.abstract ?? "",
+    dissertation_url: thesis?.dissertation_url ?? "",
+    pdf_url: thesis?.pdf_url ?? "",
+    doi: thesis?.doi ?? "",
+    urn: thesis?.urn ?? "",
+  };
+}
+
+function emptyPaperForm() {
+  return {
+    title: "",
+    journal: "",
+    year: "",
+    doi: "",
+    pubmed_id: "",
+    url: "",
+    abstract: "",
+  };
+}
+
+function candidateToMetadata(candidate) {
+  return Object.fromEntries(
+    ["abstract", "dissertation_url", "pdf_url", "doi", "urn"]
+      .map((field) => [field, candidate[field]])
+      .filter(([, value]) => value !== null && value !== undefined && value !== "")
+  );
+}
+
+function makeAuthorLinks(theses) {
+  const byAuthor = new Map();
+  for (const thesis of theses ?? []) {
+    if (thesis.author && !byAuthor.has(thesis.author)) {
+      byAuthor.set(thesis.author, thesis.running_number);
+    }
+  }
+
+  return [...byAuthor.entries()]
+    .map(([author, runningNumber]) => ({ author, runningNumber }))
+    .sort((a, b) => b.author.length - a.author.length);
+}
+
+function renderNarrativeParts(paragraph, { authorLinks, linkCitations }) {
+  const patterns = [];
+  if (linkCitations) patterns.push("\\(\\d+\\)");
+  if (authorLinks.length > 0) {
+    patterns.push(...authorLinks.map((link) => escapeRegExp(link.author)));
+  }
+
+  if (patterns.length === 0) return paragraph;
+
+  const regex = new RegExp(`(${patterns.join("|")})`, "g");
+  return paragraph.split(regex).filter(Boolean).map((part, index) => {
+    if (linkCitations && /^\(\d+\)$/.test(part)) {
+      const referenceNumber = part.slice(1, -1);
+      return (
+        <button
+          className="citation-link"
+          key={`${part}-${index}`}
+          onClick={() => navigate(`/references#ref-${referenceNumber}`)}
+        >
+          {part}
+        </button>
+      );
+    }
+
+    const authorMatch = authorLinks.find((link) => link.author === part);
+    if (authorMatch) {
+      return (
+        <button
+          className="author-link"
+          key={`${part}-${index}`}
+          onClick={() => navigate(`/theses/${authorMatch.runningNumber}`)}
+        >
+          {part}
+        </button>
+      );
+    }
+
+    return part;
+  });
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export default App;

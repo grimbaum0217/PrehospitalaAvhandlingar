@@ -4,7 +4,8 @@ from sqlalchemy import distinct, func
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Thesis, Category, Subcategory, IncludedPaper
+from app.models import Thesis, Category, Subcategory, IncludedPaper, Reference
+from app.services.metadata_lookup import lookup_metadata_candidates
 
 app = FastAPI(
     title="Prehospitala Avhandlingar",
@@ -52,6 +53,33 @@ def get_thesis(running_number: int, db: Session = Depends(get_db)):
         .first()
     )
     return thesis
+
+
+@app.patch("/theses/{running_number}")
+def update_thesis_metadata(
+    running_number: int,
+    metadata: dict,
+    db: Session = Depends(get_db),
+):
+    thesis = get_thesis_or_404(running_number, db)
+    allowed_fields = {"abstract", "dissertation_url", "pdf_url", "doi", "urn"}
+
+    for field in allowed_fields:
+        if field in metadata:
+            value = metadata[field]
+            if isinstance(value, str):
+                value = value.strip() or None
+            setattr(thesis, field, value)
+
+    db.commit()
+    db.refresh(thesis)
+    return serialize_thesis(thesis)
+
+
+@app.post("/theses/{running_number}/lookup-metadata")
+def lookup_thesis_metadata(running_number: int, db: Session = Depends(get_db)):
+    thesis = get_thesis_or_404(running_number, db)
+    return lookup_metadata_candidates(thesis)
 
 
 def get_thesis_or_404(running_number: int, db: Session):
@@ -165,6 +193,20 @@ def serialize_paper(paper: IncludedPaper):
         "url": paper.url,
         "abstract": paper.abstract,
     }
+
+
+def serialize_reference(reference: Reference):
+    return {
+        "id": reference.id,
+        "number": reference.number,
+        "text": reference.text,
+    }
+
+
+@app.get("/references")
+def get_references(db: Session = Depends(get_db)):
+    references = db.query(Reference).order_by(Reference.number).all()
+    return [serialize_reference(reference) for reference in references]
 
 
 @app.get("/theses/{running_number}/papers")

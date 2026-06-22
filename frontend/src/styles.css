@@ -56,7 +56,8 @@ nav {
 }
 
 nav button,
-.back-button {
+.back-button,
+.primary-button {
   background: transparent;
   border: 1px solid #cfc7ba;
   border-radius: 6px;
@@ -72,6 +73,17 @@ nav button:hover,
   background: #233348;
   border-color: #233348;
   color: #ffffff;
+}
+
+.primary-button {
+  background: #233348;
+  border-color: #233348;
+  color: #ffffff;
+}
+
+.primary-button:hover {
+  background: #172033;
+  border-color: #172033;
 }
 
 main {
@@ -419,6 +431,36 @@ a:hover {
   margin: 0 0 1rem;
 }
 
+.narrative-toggle {
+  margin-top: 2px;
+}
+
+.citation-link,
+.author-link {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.citation-link {
+  color: #6f3d2e;
+  font-weight: 700;
+}
+
+.citation-link:hover {
+  text-decoration: underline;
+}
+
+.author-link {
+  color: #697586;
+  font-style: italic;
+}
+
+.author-link:hover {
+  color: #344054;
+  text-decoration: underline;
+}
+
 .subcategory-list {
   display: grid;
   gap: 16px;
@@ -499,6 +541,120 @@ a:hover {
   margin: 6px 0 0;
 }
 
+.metadata-form {
+  border-top: 1px solid #ddd8ce;
+  display: grid;
+  gap: 14px;
+  margin-top: 24px;
+  padding-top: 22px;
+}
+
+.metadata-form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metadata-form label {
+  color: #475467;
+  display: grid;
+  font-size: 0.9rem;
+  gap: 6px;
+}
+
+.metadata-form input,
+.metadata-form textarea {
+  background: #ffffff;
+  border: 1px solid #cfc7ba;
+  border-radius: 6px;
+  color: #1f2933;
+  font: inherit;
+  min-width: 0;
+  padding: 9px 10px;
+}
+
+.metadata-form textarea {
+  resize: vertical;
+}
+
+.form-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.form-status {
+  color: #697586;
+  font-size: 0.92rem;
+}
+
+.metadata-lookup {
+  border-top: 1px solid #ddd8ce;
+  margin-top: 24px;
+  padding-top: 22px;
+}
+
+.lookup-heading {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.candidate-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.candidate-card {
+  border: 1px solid #ddd8ce;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.references-page {
+  max-width: 960px;
+  margin-left: 0;
+}
+
+.reference-list {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reference-list li {
+  background: #ffffff;
+  border: 1px solid #ddd8ce;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 54px minmax(0, 1fr);
+  padding: 14px 16px;
+  scroll-margin-top: 92px;
+}
+
+.reference-list li:target {
+  border-color: #8d7567;
+  box-shadow: 0 8px 24px rgba(35, 51, 72, 0.08);
+}
+
+.reference-number {
+  color: #6f3d2e;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+}
+
+.reference-list p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .status {
   color: #697586;
   margin: 12px 0;
@@ -515,6 +671,7 @@ a:hover {
 @media (max-width: 640px) {
   .site-header,
   .section-heading,
+  .lookup-heading,
   .research-area-heading,
   .subcategory-heading {
     align-items: flex-start;
@@ -525,11 +682,16 @@ a:hover {
   .stats-grid,
   .filters,
   .detail dl,
-  .metadata-list {
+  .metadata-list,
+  .metadata-form-grid {
     grid-template-columns: 1fr;
   }
 
   .thesis-row {
+    grid-template-columns: 1fr;
+  }
+
+  .reference-list li {
     grid-template-columns: 1fr;
   }
 }

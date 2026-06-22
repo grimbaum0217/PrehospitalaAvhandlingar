@@ -137,6 +137,14 @@ const translations = {
     rejected: "Avvisad",
     discoveryStored: "Sparade kandidater",
     skippedKnown: "Hoppade över kända",
+    parsedTitle: "Tolkad titel",
+    documentType: "Dokumenttyp",
+    classification: "Klassificering",
+    abstractAvailable: "Abstrakt finns",
+    pdfAvailable: "PDF finns",
+    includedPapersFound: "Ingående artiklar hittade",
+    yes: "Ja",
+    no: "Nej",
   },
   en: {
     overview: "Statistics",
@@ -272,6 +280,14 @@ const translations = {
     rejected: "Rejected",
     discoveryStored: "Stored candidates",
     skippedKnown: "Skipped known",
+    parsedTitle: "Parsed title",
+    documentType: "Document type",
+    classification: "Classification",
+    abstractAvailable: "Abstract available",
+    pdfAvailable: "PDF available",
+    includedPapersFound: "Included papers found",
+    yes: "Yes",
+    no: "No",
   },
 };
 
@@ -1597,6 +1613,32 @@ function MetadataLookup({ onChecked, onSaved, runningNumber, t }) {
                   .join(" · ")}
               </p>
               <dl className="metadata-list">
+                {candidate.parsed_title && (
+                  <div>
+                    <dt>{t("parsedTitle")}</dt>
+                    <dd>{candidate.parsed_title}</dd>
+                  </div>
+                )}
+                {candidate.document_type && (
+                  <div>
+                    <dt>{t("documentType")}</dt>
+                    <dd>{candidate.document_type}</dd>
+                  </div>
+                )}
+                {candidate.classification && (
+                  <div>
+                    <dt>{t("classification")}</dt>
+                    <dd>{candidate.classification}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt>{t("abstractAvailable")}</dt>
+                  <dd>{candidate.has_abstract ? t("yes") : t("no")}</dd>
+                </div>
+                <div>
+                  <dt>{t("pdfAvailable")}</dt>
+                  <dd>{candidate.has_pdf || candidate.pdf_url ? t("yes") : t("no")}</dd>
+                </div>
                 {candidate.dissertation_url && (
                   <div>
                     <dt>{t("dissertationUrl")}</dt>
@@ -1623,6 +1665,17 @@ function MetadataLookup({ onChecked, onSaved, runningNumber, t }) {
                 )}
               </dl>
               {candidate.abstract && <NarrativeText t={t} text={candidate.abstract} />}
+              {candidate.included_papers?.length > 0 && (
+                <div className="paper-list">
+                  <h4>{t("includedPapersFound")}</h4>
+                  {candidate.included_papers.map((paper, paperIndex) => (
+                    <article className="paper-item" key={`${paper.title}-${paperIndex}`}>
+                      <p>{paper.title}</p>
+                      {paper.doi && <p className="paper-meta">DOI: {paper.doi}</p>}
+                    </article>
+                  ))}
+                </div>
+              )}
               <button className="primary-button" onClick={() => useCandidate(candidate)} type="button">
                 {t("useMetadata")}
               </button>

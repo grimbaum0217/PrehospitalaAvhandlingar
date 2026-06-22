@@ -2,6 +2,7 @@ from app.models import Thesis
 from app.providers import SearchQuery
 from app.providers import avhandlingar, diva, swepub
 from app.providers.common import MetadataError, normalize_candidate, score_candidate
+from app.services.web_pipeline import lookup_thesis_web_candidates, parse_candidate_url
 
 
 PROVIDERS = (diva, swepub, avhandlingar)
@@ -24,6 +25,10 @@ def empty_candidate(source="Current local metadata"):
 
 
 def lookup_metadata_candidates(thesis: Thesis):
+    return lookup_thesis_web_candidates(thesis)
+
+
+def legacy_lookup_metadata_candidates(thesis: Thesis):
     search_context = SearchQuery(
         title=thesis.title,
         author=thesis.author,
@@ -94,7 +99,7 @@ def lookup_metadata_candidates(thesis: Thesis):
 
 
 def lookup_metadata_url(url: str):
-    candidate = diva.lookup_url(url)
+    candidate = parse_candidate_url(url, SearchQuery())
     return {
         "candidate": candidate,
         "candidates": [candidate],

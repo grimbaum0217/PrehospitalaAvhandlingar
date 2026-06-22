@@ -1,10 +1,9 @@
 import unittest
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.providers import diva
 from app.providers.common import SearchQuery
-from app.services import metadata_lookup
+from app.services.metadata_lookup import apply_diva_preference
 
 
 ERIK_URL = "https://oru.diva-portal.org/smash/record.jsf?pid=diva2%3A1639288"
@@ -109,50 +108,14 @@ class DivaLookupTests(unittest.TestCase):
         self.assertGreaterEqual(candidates[0]["confidence"], 0.9)
 
     def test_diva_candidate_penalizes_weaker_library_hit(self):
-        thesis = SimpleNamespace(
-            title="Non-conveyance within the Swedish ambulance service : A prehospital patient safety study",
-            author="Erik Höglund",
-            university="Örebro Universitet",
-            year=2022,
-            dissertation_url=None,
-            pdf_url=None,
-            doi=None,
-            urn=None,
-            abstract=None,
-        )
-        diva_provider = SimpleNamespace(
-            SOURCE="DiVA",
-            search=lambda query: [
-                {
-                    "title": thesis.title,
-                    "author": "Höglund, Erik",
-                    "university": "Örebro University",
-                    "year": 2022,
-                    "dissertation_url": ERIK_URL,
-                    "source": "DiVA",
-                    "source_host": "oru.diva-portal.org",
-                }
-            ],
-        )
-        swepub_provider = SimpleNamespace(
-            SOURCE="SwePub",
-            search=lambda query: [
-                {
-                    "title": thesis.title,
-                    "author": "Höglund, Erik",
-                    "university": "Örebro University",
-                    "year": 2022,
-                    "dissertation_url": "https://libris.kb.se/bib/example",
-                    "source": "SwePub",
-                }
-            ],
+        result = apply_diva_preference(
+            [
+                {"source": "SwePub", "confidence": 0.96},
+                {"source": "DiVA", "confidence": 0.9},
+            ]
         )
 
-        with patch.object(metadata_lookup, "PROVIDERS", (swepub_provider, diva_provider)):
-            result = metadata_lookup.lookup_metadata_candidates(thesis)
-
-        self.assertEqual(result["candidates"][0]["source"], "DiVA")
-        swepub = next(candidate for candidate in result["candidates"] if candidate["source"] == "SwePub")
+        swepub = next(candidate for candidate in result if candidate["source"] == "SwePub")
         self.assertLessEqual(swepub["confidence"], 0.74)
 
 

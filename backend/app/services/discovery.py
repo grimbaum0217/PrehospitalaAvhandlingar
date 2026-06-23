@@ -10,7 +10,14 @@ from sqlalchemy.orm import Session
 from app.models import DiscoveryCandidate, Thesis
 from app.providers import SearchQuery
 from app.providers import avhandlingar, diva, swepub
-from app.providers.common import MetadataError, clean_text, fetch_json, normalize_year, similarity
+from app.providers.common import (
+    MetadataError,
+    clean_text,
+    comparable_text,
+    fetch_json,
+    normalize_year,
+    similarity,
+)
 
 
 SWEDISH_KEYWORDS = [
@@ -78,6 +85,8 @@ def discover_candidates(db: Session, params: dict[str, Any]) -> dict[str, Any]:
             for record in records:
                 if not in_year_range(record, year_from, year_to):
                     continue
+                if not is_likely_dissertation_record(record):
+                    continue
 
                 matched_keywords = match_ems_keywords(record, keywords)
                 if not matched_keywords:
@@ -89,7 +98,6 @@ def discover_candidates(db: Session, params: dict[str, Any]) -> dict[str, Any]:
 
                 if candidate["match_status"] == "already_in_database" and not include_known:
                     skipped_known += 1
-                    continue
 
                 upsert_discovery_candidate(db, candidate)
                 stored += 1
@@ -168,9 +176,23 @@ def in_year_range(record: dict[str, Any], year_from: int | None, year_to: int | 
 def match_ems_keywords(record: dict[str, Any], keywords: list[str]) -> list[str]:
     haystack = " ".join(
         clean_text(record.get(field)).lower()
-        for field in ["title", "abstract", "keywords", "subject_terms"]
+        for field in ["title", "keywords", "subject_terms"]
     )
     return [keyword for keyword in keywords if keyword.lower() in haystack]
+
+
+def is_likely_dissertation_record(record: dict[str, Any]) -> bool:
+    haystack = " ".join(
+        clean_text(record.get(field)).lower()
+        for field in ["title", "source", "document_type", "publication_type", "degree_type"]
+    )
+    if any(marker in haystack for marker in ["article", "journal", "tidskriftsartikel"]):
+        return False
+    return bool(clean_text(record.get("title"))) and (
+        any(marker in haystack for marker in ["dissertation", "thesis", "avhandling"])
+        or bool(record.get("urn"))
+        or bool(record.get("dissertation_url"))
+    )
 
 
 def classify_duplicate(record: dict[str, Any], theses: list[Thesis]) -> dict[str, Any]:
@@ -184,13 +206,14 @@ def classify_duplicate(record: dict[str, Any], theses: list[Thesis]) -> dict[str
     for thesis in theses:
         identifier_match = exact_identifier_match(record, thesis)
         title_score = similarity(record.get("title"), thesis.title)
-        author_score = similarity(record.get("author"), thesis.author)
+        author_score = author_similarity(record.get("author"), thesis.author)
         university_score = similarity(record.get("university"), thesis.university)
         year_match = normalize_year(record.get("year")) == normalize_year(thesis.year)
+        year_close = years_are_close(record.get("year"), thesis.year)
         combined = (
-            title_score * 0.55
-            + author_score * 0.25
-            + (0.12 if year_match else 0)
+            title_score * 0.5
+            + author_score * 0.28
+            + (0.14 if year_match else 0.06 if year_close else 0)
             + university_score * 0.08
         )
 
@@ -206,7 +229,11 @@ def classify_duplicate(record: dict[str, Any], theses: list[Thesis]) -> dict[str
                 }
             )
 
-        if identifier_match or (title_score >= 0.92 and author_score >= 0.85):
+        if identifier_match or (
+            title_score >= 0.9
+            and author_score >= 0.82
+            and (year_match or university_score >= 0.72)
+        ):
             best["match_status"] = "already_in_database"
             best["similarity_to_existing"] = round(max(combined, 0.98), 3)
             best["matched_existing_thesis_id"] = thesis.id
@@ -216,12 +243,44 @@ def classify_duplicate(record: dict[str, Any], theses: list[Thesis]) -> dict[str
         possible_duplicate = (
             title_score >= 0.75
             or (author_score >= 0.85 and year_match)
-            or (author_score >= 0.78 and year_match and university_score >= 0.7)
+            or (author_score >= 0.78 and year_close and university_score >= 0.7)
         )
         if possible_duplicate and best["match_status"] != "already_in_database":
             best["match_status"] = "possible_duplicate"
 
     return best
+
+
+def author_similarity(left: Any, right: Any) -> float:
+    left_parts = author_name_parts(left)
+    right_parts = author_name_parts(right)
+    if not left_parts or not right_parts:
+        return 0.0
+
+    base = similarity(" ".join(left_parts), " ".join(right_parts))
+    left_set = set(left_parts)
+    right_set = set(right_parts)
+    overlap = len(left_set & right_set) / max(len(left_set), len(right_set))
+    left_last = left_parts[-1]
+    right_last = right_parts[-1]
+    last_name_score = 1.0 if left_last == right_last else similarity(left_last, right_last)
+    return max(base, overlap, last_name_score * 0.72)
+
+
+def author_name_parts(value: Any) -> list[str]:
+    text = comparable_text(value)
+    if not text:
+        return []
+    if "," in clean_text(value):
+        parts = [part.strip() for part in comparable_text(value).split() if part.strip()]
+        return parts[1:] + parts[:1] if len(parts) > 1 else parts
+    return text.split()
+
+
+def years_are_close(left: Any, right: Any) -> bool:
+    left_year = normalize_year(left)
+    right_year = normalize_year(right)
+    return bool(left_year and right_year and abs(left_year - right_year) <= 1)
 
 
 def exact_identifier_match(record: dict[str, Any], thesis: Thesis) -> bool:
@@ -253,10 +312,10 @@ def candidate_payload(
         "author": clean_text(record.get("author")) or None,
         "university": clean_text(record.get("university")) or None,
         "year": normalize_year(record.get("year")),
-        "abstract": clean_text(record.get("abstract")) or None,
+        "abstract": None,
         "source": record.get("source"),
         "source_url": record.get("dissertation_url"),
-        "pdf_url": record.get("pdf_url"),
+        "pdf_url": None,
         "doi": record.get("doi"),
         "urn": record.get("urn"),
         "matched_keywords": matched_keywords,
@@ -331,6 +390,39 @@ def list_discovery_candidates(db: Session, params: dict[str, Any]) -> list[Disco
     ).all()
 
 
+def discovery_summary(db: Session) -> dict[str, Any]:
+    total_theses = db.query(Thesis).count()
+    awaiting_review = (
+        db.query(DiscoveryCandidate)
+        .filter(DiscoveryCandidate.match_status != "already_in_database")
+        .filter(DiscoveryCandidate.review_status == "needs_review")
+        .count()
+    )
+    approved = (
+        db.query(DiscoveryCandidate)
+        .filter(DiscoveryCandidate.match_status != "already_in_database")
+        .filter(DiscoveryCandidate.review_status == "approved")
+        .count()
+    )
+    rejected = (
+        db.query(DiscoveryCandidate)
+        .filter(DiscoveryCandidate.review_status == "rejected")
+        .count()
+    )
+    possible_duplicates = (
+        db.query(DiscoveryCandidate)
+        .filter(DiscoveryCandidate.match_status == "possible_duplicate")
+        .count()
+    )
+    return {
+        "existing_theses": total_theses,
+        "awaiting_review": awaiting_review,
+        "approved_new_theses": approved,
+        "rejected_candidates": rejected,
+        "possible_duplicates": possible_duplicates,
+    }
+
+
 def serialize_discovery_candidate(candidate: DiscoveryCandidate) -> dict[str, Any]:
     return {
         "id": candidate.id,
@@ -341,10 +433,10 @@ def serialize_discovery_candidate(candidate: DiscoveryCandidate) -> dict[str, An
         "abstract": candidate.abstract,
         "source": candidate.source,
         "source_url": candidate.source_url,
-        "pdf_url": candidate.pdf_url,
         "doi": candidate.doi,
         "urn": candidate.urn,
         "matched_keywords": json.loads(candidate.matched_keywords or "[]"),
+        "ems_match_reason": ems_match_reason(candidate),
         "keyword_group": candidate.keyword_group,
         "match_status": candidate.match_status,
         "similarity_to_existing": candidate.similarity_to_existing,
@@ -354,3 +446,10 @@ def serialize_discovery_candidate(candidate: DiscoveryCandidate) -> dict[str, An
         "created_at": candidate.created_at,
         "updated_at": candidate.updated_at,
     }
+
+
+def ems_match_reason(candidate: DiscoveryCandidate) -> str:
+    keywords = json.loads(candidate.matched_keywords or "[]")
+    if keywords:
+        return f"Matched EMS/prehospital keyword(s): {', '.join(keywords)}."
+    return "Matched EMS/prehospital search criteria."

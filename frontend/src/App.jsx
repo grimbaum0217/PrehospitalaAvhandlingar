@@ -118,7 +118,16 @@ const translations = {
     lastChecked: "Senast kontrollerad",
     discovery: "Discovery",
     dissertationDiscovery: "Avhandlingsdiscovery",
+    missingDissertationDiscovery: "Saknade avhandlingar",
     runDiscovery: "Kör discovery",
+    discoveryDashboard: "Discoveryöversikt",
+    existingTheses: "Befintliga avhandlingar",
+    awaitingReview: "Väntar granskning",
+    approvedNewTheses: "Godkända nya avhandlingar",
+    rejectedCandidates: "Avvisade kandidater",
+    candidateDetails: "Kandidatdetaljer",
+    sourceUrl: "Käll-URL",
+    emsMatchReason: "Varför EMS/prehospital",
     yearFrom: "Från år",
     yearTo: "Till år",
     source: "Källa",
@@ -273,7 +282,16 @@ const translations = {
     lastChecked: "Last checked",
     discovery: "Discovery",
     dissertationDiscovery: "Dissertation discovery",
+    missingDissertationDiscovery: "Missing dissertations",
     runDiscovery: "Run discovery",
+    discoveryDashboard: "Discovery dashboard",
+    existingTheses: "Existing theses",
+    awaitingReview: "Awaiting review",
+    approvedNewTheses: "Approved new theses",
+    rejectedCandidates: "Rejected candidates",
+    candidateDetails: "Candidate details",
+    sourceUrl: "Source URL",
+    emsMatchReason: "Why EMS/prehospital",
     yearFrom: "From year",
     yearTo: "To year",
     source: "Source",
@@ -975,6 +993,7 @@ function DiscoveryPage({ t }) {
     match_status: "all",
     include_known: false,
   });
+  const [summary, setSummary] = useState(null);
   const [candidates, setCandidates] = useState([]);
   const [status, setStatus] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -986,6 +1005,9 @@ function DiscoveryPage({ t }) {
 
     fetchJson(`/discovery/candidates?${params.toString()}`)
       .then((data) => setCandidates(data))
+      .catch(() => setStatus(t("couldNotLoadData")));
+    fetchJson("/discovery/summary")
+      .then((data) => setSummary(data))
       .catch(() => setStatus(t("couldNotLoadData")));
   }, [filters, reloadKey]);
 
@@ -1022,10 +1044,20 @@ function DiscoveryPage({ t }) {
       <div className="section-heading">
         <div>
           <p className="eyebrow">{t("adminMode")}</p>
-          <h1>{t("dissertationDiscovery")}</h1>
+          <h1>{t("missingDissertationDiscovery")}</h1>
         </div>
         <span className="result-count">{candidates.length} {t("results")}</span>
       </div>
+
+      {summary && (
+        <div className="discovery-dashboard" aria-label={t("discoveryDashboard")}>
+          <SummaryTile label={t("existingTheses")} value={summary.existing_theses} />
+          <SummaryTile label={t("awaitingReview")} value={summary.awaiting_review} />
+          <SummaryTile label={t("approvedNewTheses")} value={summary.approved_new_theses} />
+          <SummaryTile label={t("rejectedCandidates")} value={summary.rejected_candidates} />
+          <SummaryTile label={t("possibleDuplicate")} value={summary.possible_duplicates} />
+        </div>
+      )}
 
       <form className="discovery-controls" onSubmit={handleSearch}>
         <label>
@@ -1137,6 +1169,44 @@ function DiscoveryPage({ t }) {
             <p className="paper-meta">
               {t("matchedKeywords")}: {(candidate.matched_keywords ?? []).join(", ") || "-"}
             </p>
+            <dl className="candidate-detail-list">
+              <div>
+                <dt>{t("title")}</dt>
+                <dd>{candidate.title || "-"}</dd>
+              </div>
+              <div>
+                <dt>{t("author")}</dt>
+                <dd>{candidate.author || "-"}</dd>
+              </div>
+              <div>
+                <dt>{t("year")}</dt>
+                <dd>{candidate.year || "-"}</dd>
+              </div>
+              <div>
+                <dt>{t("university")}</dt>
+                <dd>{candidate.university || "-"}</dd>
+              </div>
+              <div>
+                <dt>{t("source")}</dt>
+                <dd>{candidate.source || "-"}</dd>
+              </div>
+              <div>
+                <dt>{t("sourceUrl")}</dt>
+                <dd>
+                  {candidate.source_url ? (
+                    <a href={candidate.source_url} target="_blank" rel="noreferrer">
+                      {candidate.source_url}
+                    </a>
+                  ) : (
+                    "-"
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("emsMatchReason")}</dt>
+                <dd>{candidate.ems_match_reason || "-"}</dd>
+              </div>
+            </dl>
             {candidate.match_status === "possible_duplicate" && (
               <p className="duplicate-warning">
                 {t("possibleDuplicateWarning")}: {t("similarity")} {candidate.similarity_to_existing}
@@ -1150,11 +1220,6 @@ function DiscoveryPage({ t }) {
                 {candidate.matched_existing_running_number &&
                   ` · #${candidate.matched_existing_running_number}`}
               </p>
-            )}
-            {candidate.source_url && (
-              <a href={candidate.source_url} target="_blank" rel="noreferrer">
-                {t("openDissertationRecord")}
-              </a>
             )}
             <div className="form-actions">
               <button
@@ -1185,6 +1250,15 @@ function DiscoveryPage({ t }) {
         ))}
       </div>
     </section>
+  );
+}
+
+function SummaryTile({ label, value }) {
+  return (
+    <div className="summary-tile">
+      <strong>{value ?? 0}</strong>
+      <span>{label}</span>
+    </div>
   );
 }
 
@@ -1433,23 +1507,6 @@ function ThesisDetail({ isAdmin, runningNumber, t }) {
 
             {isAdmin && (
               <>
-                <MetadataEditForm
-                  onSaved={setSavedThesis}
-                  t={t}
-                  thesis={thesis}
-                />
-                <MetadataLookup
-                  onChecked={(status) =>
-                    setSavedThesis((current) => ({
-                      ...(current ?? thesis),
-                      metadata_status: status,
-                      metadata_last_checked_at: new Date().toISOString(),
-                    }))
-                  }
-                  onSaved={setSavedThesis}
-                  runningNumber={runningNumber}
-                  t={t}
-                />
                 <IncludedPaperForm
                   onSaved={() => setPaperReload((current) => current + 1)}
                   runningNumber={runningNumber}

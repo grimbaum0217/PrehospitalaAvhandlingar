@@ -814,6 +814,34 @@ a:hover {
   grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
 }
 
+.discovery-dashboard {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.summary-tile {
+  background: #ffffff;
+  border: 1px solid #ddd8ce;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.summary-tile strong {
+  color: #1f2933;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.summary-tile span {
+  color: #697586;
+  font-size: 0.88rem;
+}
+
 .discovery-controls label,
 .discovery-filters label {
   color: #475467;
@@ -847,6 +875,30 @@ a:hover {
   color: #6f3d2e;
   margin: 0;
   padding: 8px 10px;
+}
+
+.candidate-detail-list {
+  display: grid;
+  gap: 1px;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+  overflow-wrap: anywhere;
+}
+
+.candidate-detail-list div {
+  display: contents;
+}
+
+.candidate-detail-list dt,
+.candidate-detail-list dd {
+  background: #ffffff;
+  margin: 0;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.candidate-detail-list dt {
+  color: #475467;
+  font-weight: 700;
 }
 
 .lookup-error-summary,
@@ -918,6 +970,7 @@ a:hover {
   .overview-grid,
   .stats-grid,
   .filters,
+  .discovery-dashboard,
   .discovery-controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -941,8 +994,10 @@ a:hover {
   .overview-grid,
   .stats-grid,
   .filters,
+  .discovery-dashboard,
   .detail dl,
   .metadata-list,
+  .candidate-detail-list,
   .metadata-form-grid,
   .lookup-url-form,
   .metadata-comparison,

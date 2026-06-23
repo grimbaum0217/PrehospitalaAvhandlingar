@@ -12,6 +12,7 @@ from app.models import Thesis, Category, Subcategory, IncludedPaper, Reference, 
 from app.providers.common import MetadataError
 from app.services.discovery import (
     discover_candidates,
+    discovery_summary,
     list_discovery_candidates,
     serialize_discovery_candidate,
 )
@@ -164,6 +165,11 @@ def lookup_metadata_from_url(payload: dict):
 @app.post("/discovery/search")
 def run_discovery_search(payload: dict, db: Session = Depends(get_db)):
     return discover_candidates(db, payload)
+
+
+@app.get("/discovery/summary")
+def get_discovery_summary(db: Session = Depends(get_db)):
+    return discovery_summary(db)
 
 
 @app.get("/discovery/candidates")

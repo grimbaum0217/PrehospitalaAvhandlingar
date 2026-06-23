@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import ssl
 from dataclasses import dataclass
 from html import unescape
 from html.parser import HTMLParser
@@ -11,9 +12,12 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+import certifi
+
 
 USER_AGENT = "PrehospitalaAvhandlingar/0.1 dissertation metadata lookup"
 TIMEOUT_SECONDS = 12
+SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
 FIELD_NAMES = (
     "title",
@@ -156,7 +160,7 @@ def fetch_text(url: str, params: dict[str, Any] | None = None) -> str:
         url = f"{url}?{urlencode(params, doseq=True)}"
     request = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "*/*"})
     try:
-        with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+        with urlopen(request, timeout=TIMEOUT_SECONDS, context=SSL_CONTEXT) as response:
             charset = response.headers.get_content_charset() or "utf-8"
             return response.read().decode(charset, errors="replace")
     except (HTTPError, URLError, TimeoutError, OSError) as exc:

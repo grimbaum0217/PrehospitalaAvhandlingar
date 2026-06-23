@@ -60,13 +60,15 @@ def record_candidate(record_url: str, query: SearchQuery) -> dict:
             "author": author,
             "university": extract_labeled_value(html, ["University", "Universitet"]),
             "year": extract_year(html),
-            "dissertation_url": record_url,
+            "dissertation_url": extract_repository_url(html) or record_url,
             "pdf_url": extract_pdf_url(html),
             "doi": find_doi(html),
             "abstract": clean_text(meta.get("description")),
         },
         SOURCE,
     )
+    candidate["source_url"] = candidate.get("dissertation_url")
+    candidate["source_host"] = source_host(candidate.get("dissertation_url"))
     candidate["confidence"] = round(score_candidate(candidate, query), 3)
     return candidate
 
@@ -99,3 +101,24 @@ def extract_pdf_url(html: str) -> str | None:
     if not match:
         return None
     return absolute_url(BASE_URL, match.group(1).replace("&amp;", "&"))
+
+
+def extract_repository_url(html: str) -> str | None:
+    repository_hosts = [
+        "diva-portal.org",
+        "openarchive.ki.se",
+        "lup.lub.lu.se",
+        "gupea.ub.gu.se",
+    ]
+    for href in re.findall(r'href=["\']([^"\']+)["\']', html):
+        url = href.replace("&amp;", "&")
+        if any(host in url for host in repository_hosts):
+            return absolute_url(BASE_URL, url)
+    return None
+
+
+def source_host(url: str | None) -> str | None:
+    if not url:
+        return None
+    match = re.match(r"https?://([^/]+)", url)
+    return match.group(1).lower() if match else None

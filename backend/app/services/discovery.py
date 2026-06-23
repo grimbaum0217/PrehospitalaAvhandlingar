@@ -36,8 +36,10 @@ SWEDISH_KEYWORDS = [
 ENGLISH_KEYWORDS = [
     "prehospital",
     "emergency medical services",
+    "emergency care",
     "ems",
     "ambulance",
+    "paramedic",
     "out-of-hospital",
     "emergency dispatch",
     "out-of-hospital cardiac arrest",
@@ -51,8 +53,10 @@ KEYWORD_GROUPS = {
     "english": ENGLISH_KEYWORDS,
 }
 
-DISCOVERY_SOURCES = ["diva", "swepub", "libris", "avhandlingar"]
+DISCOVERY_SOURCES = ["diva", "avhandlingar", "swepub", "libris"]
 LIBRIS_SEARCH_URL = "https://libris.kb.se/xsearch"
+LIBRARY_SOURCES = {"LIBRIS", "SwePub"}
+REPOSITORY_HOSTS = ("diva-portal.org", "openarchive.ki.se", "lup.lub.lu.se", "gupea.ub.gu.se")
 
 
 def discover_candidates(db: Session, params: dict[str, Any]) -> dict[str, Any]:
@@ -61,6 +65,7 @@ def discover_candidates(db: Session, params: dict[str, Any]) -> dict[str, Any]:
     source = params.get("source") or "all"
     keyword_group = params.get("keyword_group") or "all"
     known_person = clean_text(params.get("known_person"))
+    university = clean_text(params.get("university"))
     include_known = bool(params.get("show_known_matches"))
     limit_per_query = int(params.get("limit_per_query") or 8)
 
@@ -77,7 +82,7 @@ def discover_candidates(db: Session, params: dict[str, Any]) -> dict[str, Any]:
     for source_name in sources:
         for term in search_terms:
             try:
-                records = search_source(source_name, term, known_person, limit_per_query)
+                records = search_source(source_name, term, known_person, university, limit_per_query)
             except MetadataError as exc:
                 errors.append({"source": source_name, "term": term, "error": str(exc)})
                 continue
@@ -111,25 +116,37 @@ def discover_candidates(db: Session, params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def search_source(source_name: str, term: str, known_person: str, limit: int) -> list[dict[str, Any]]:
-    query = SearchQuery(title=term if not known_person else None, author=known_person or None)
+def search_source(
+    source_name: str,
+    term: str,
+    known_person: str,
+    university: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    query = SearchQuery(
+        title=term if not known_person else None,
+        author=known_person or None,
+        university=university or None,
+    )
     if source_name == "diva":
-        return search_diva_all_hosts(query, limit)
+        return search_diva_hosts(query, limit)
     if source_name == "swepub":
-        return swepub.search(SearchQuery(title=term, author=known_person or None), limit=limit)
+        return swepub.search(SearchQuery(title=term, author=known_person or None, university=university or None), limit=limit)
     if source_name == "libris":
         return search_libris(term, known_person, limit)
     if source_name == "avhandlingar":
-        return avhandlingar.search(SearchQuery(title=term, author=known_person or None), limit=limit)
+        return avhandlingar.search(SearchQuery(title=term, author=known_person or None, university=university or None), limit=limit)
     return []
 
 
-def search_diva_all_hosts(query: SearchQuery, limit: int) -> list[dict[str, Any]]:
-    hosts = [diva.PORTAL_HOST]
-    for mapped_hosts in diva.UNIVERSITY_HOSTS.values():
-        for host in mapped_hosts:
-            if host not in hosts:
-                hosts.append(host)
+def search_diva_hosts(query: SearchQuery, limit: int) -> list[dict[str, Any]]:
+    hosts = diva.hosts_for_university(query.university)
+    if not hosts:
+        hosts = []
+        for mapped_hosts in diva.UNIVERSITY_HOSTS.values():
+            for host in mapped_hosts:
+                if host.endswith(".diva-portal.org") and host not in hosts:
+                    hosts.append(host)
 
     results = []
     seen = set()
@@ -187,6 +204,10 @@ def is_likely_dissertation_record(record: dict[str, Any]) -> bool:
         for field in ["title", "source", "document_type", "publication_type", "degree_type"]
     )
     if any(marker in haystack for marker in ["article", "journal", "tidskriftsartikel"]):
+        return False
+    if record.get("source") in LIBRARY_SOURCES and not any(
+        marker in haystack for marker in ["dissertation", "thesis", "avhandling"]
+    ):
         return False
     return bool(clean_text(record.get("title"))) and (
         any(marker in haystack for marker in ["dissertation", "thesis", "avhandling"])
@@ -314,8 +335,10 @@ def candidate_payload(
         "year": normalize_year(record.get("year")),
         "abstract": None,
         "source": record.get("source"),
-        "source_url": record.get("dissertation_url"),
-        "pdf_url": None,
+        "source_host": record.get("source_host"),
+        "source_url": record.get("source_url") or record.get("dissertation_url"),
+        "pdf_url": record.get("pdf_url"),
+        "publication_type": record.get("publication_type"),
         "doi": record.get("doi"),
         "urn": record.get("urn"),
         "matched_keywords": matched_keywords,
@@ -338,8 +361,10 @@ def upsert_discovery_candidate(db: Session, payload: dict[str, Any]) -> Discover
         "year",
         "abstract",
         "source",
+        "source_host",
         "source_url",
         "pdf_url",
+        "publication_type",
         "doi",
         "urn",
         "keyword_group",
@@ -348,6 +373,12 @@ def upsert_discovery_candidate(db: Session, payload: dict[str, Any]) -> Discover
         "matched_existing_thesis_id",
         "matched_existing_running_number",
     ]:
+        if (
+            existing
+            and field in {"source", "source_host", "source_url", "pdf_url", "publication_type"}
+            and not should_replace_source(existing, payload)
+        ):
+            continue
         setattr(candidate, field, payload.get(field))
 
     candidate.matched_keywords = json.dumps(payload.get("matched_keywords") or [], ensure_ascii=False)
@@ -355,6 +386,27 @@ def upsert_discovery_candidate(db: Session, payload: dict[str, Any]) -> Discover
     candidate.updated_at = now
     db.add(candidate)
     return candidate
+
+
+def should_replace_source(existing: DiscoveryCandidate, payload: dict[str, Any]) -> bool:
+    return source_rank(payload.get("source"), payload.get("source_host")) >= source_rank(
+        existing.source,
+        existing.source_host,
+    )
+
+
+def source_rank(source: str | None, source_host: str | None) -> int:
+    if source == "DiVA":
+        return 5
+    if source_host and any(host in source_host for host in REPOSITORY_HOSTS):
+        return 4
+    if source == "avhandlingar.se":
+        return 3
+    if source == "SwePub":
+        return 2
+    if source == "LIBRIS":
+        return 1
+    return 0
 
 
 def find_existing_candidate(db: Session, payload: dict[str, Any]) -> DiscoveryCandidate | None:
@@ -432,7 +484,10 @@ def serialize_discovery_candidate(candidate: DiscoveryCandidate) -> dict[str, An
         "year": candidate.year,
         "abstract": candidate.abstract,
         "source": candidate.source,
+        "source_host": candidate.source_host,
         "source_url": candidate.source_url,
+        "pdf_url": candidate.pdf_url,
+        "publication_type": candidate.publication_type,
         "doi": candidate.doi,
         "urn": candidate.urn,
         "matched_keywords": json.loads(candidate.matched_keywords or "[]"),

@@ -21,6 +21,23 @@ from app.providers.common import (
 
 SOURCE = "DiVA"
 PORTAL_HOST = "www.diva-portal.org"
+DISSERTATION_PUBLICATION_TYPES = [
+    "monographDoctoralThesis",
+    "comprehensiveDoctoralThesis",
+    "monographLicentiateThesis",
+    "comprehensiveLicentiateThesis",
+]
+THESIS_TYPE_LABELS = [
+    "doctoral thesis",
+    "doktorsavhandling",
+    "licentiate thesis",
+    "licentiatuppsats",
+    "comprehensive doctoral thesis",
+    "monograph doctoral thesis",
+    "comprehensive licentiate thesis",
+    "monograph licentiate thesis",
+    "dissertation",
+]
 
 UNIVERSITY_HOSTS = {
     "orebro universitet": ["oru.diva-portal.org"],
@@ -86,6 +103,7 @@ def search_host(host: str, query: SearchQuery, limit: int) -> list[dict]:
                 "searchType": "SIMPLE",
                 "noOfRows": limit,
                 "sortOrder": "relevance_sort_desc",
+                "publicationTypeCode": DISSERTATION_PUBLICATION_TYPES,
             },
         )
         for url in find_record_urls(html, host):
@@ -172,6 +190,16 @@ def record_candidate(record_url: str, query: SearchQuery) -> dict:
             "dcterms.abstract",
         ],
     )
+    publication_type = first_value(
+        meta,
+        [
+            "DC.Type",
+            "DC.type",
+            "dc.type",
+            "citation_dissertation_name",
+            "citation_document_type",
+        ],
+    )
 
     candidate = normalize_candidate(
         {
@@ -189,6 +217,8 @@ def record_candidate(record_url: str, query: SearchQuery) -> dict:
         },
         SOURCE,
     )
+    candidate["source_url"] = record_url
+    candidate["publication_type"] = clean_text(publication_type) or None
     if abstract:
         candidate["abstract"] = clean_text(abstract)
     candidate["confidence"] = round(score_candidate(candidate, query), 3)
@@ -242,7 +272,12 @@ def has_strong_candidate(candidates: list[dict]) -> bool:
 
 def is_dissertation_candidate(candidate: dict) -> bool:
     title = clean_text(candidate.get("title")).lower()
-    return bool(candidate.get("dissertation_url")) and bool(title)
+    publication_type = clean_text(candidate.get("publication_type")).lower()
+    return (
+        bool(candidate.get("dissertation_url"))
+        and bool(title)
+        and any(label in publication_type for label in THESIS_TYPE_LABELS)
+    )
 
 
 def deduplicate(candidates: list[dict]) -> list[dict]:

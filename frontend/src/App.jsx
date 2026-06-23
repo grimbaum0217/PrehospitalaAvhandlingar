@@ -988,6 +988,7 @@ function DiscoveryPage({ t }) {
     source: "all",
     keyword_group: "all",
     known_person: "",
+    university: "",
   });
   const [filters, setFilters] = useState({
     match_status: "all",
@@ -1118,6 +1119,15 @@ function DiscoveryPage({ t }) {
             }
           />
         </label>
+        <label>
+          <span>{t("university")}</span>
+          <input
+            value={searchForm.university}
+            onChange={(event) =>
+              setSearchForm((current) => ({ ...current, university: event.target.value }))
+            }
+          />
+        </label>
         <div className="form-actions">
           <button className="primary-button" type="submit">{t("runDiscovery")}</button>
         </div>
@@ -1188,8 +1198,14 @@ function DiscoveryPage({ t }) {
               </div>
               <div>
                 <dt>{t("source")}</dt>
-                <dd>{candidate.source || "-"}</dd>
+                <dd>{[candidate.source, candidate.source_host].filter(Boolean).join(" · ") || "-"}</dd>
               </div>
+              {candidate.publication_type && (
+                <div>
+                  <dt>{t("documentType")}</dt>
+                  <dd>{candidate.publication_type}</dd>
+                </div>
+              )}
               <div>
                 <dt>{t("sourceUrl")}</dt>
                 <dd>

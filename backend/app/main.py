@@ -34,20 +34,27 @@ def utcnow():
 def ensure_metadata_workflow_columns():
     Base.metadata.create_all(bind=engine)
     with engine.begin() as connection:
-        columns = {
+        thesis_columns = {
             row[1] for row in connection.execute(text("PRAGMA table_info(theses)")).fetchall()
         }
-        if "metadata_status" not in columns:
+        if "metadata_status" not in thesis_columns:
             connection.execute(
                 text(
                     "ALTER TABLE theses ADD COLUMN metadata_status "
                     "VARCHAR NOT NULL DEFAULT 'not_started'"
                 )
             )
-        if "metadata_last_checked_at" not in columns:
+        if "metadata_last_checked_at" not in thesis_columns:
             connection.execute(
                 text("ALTER TABLE theses ADD COLUMN metadata_last_checked_at DATETIME")
             )
+        discovery_columns = {
+            row[1] for row in connection.execute(text("PRAGMA table_info(discovery_candidates)")).fetchall()
+        }
+        if "source_host" not in discovery_columns:
+            connection.execute(text("ALTER TABLE discovery_candidates ADD COLUMN source_host VARCHAR"))
+        if "publication_type" not in discovery_columns:
+            connection.execute(text("ALTER TABLE discovery_candidates ADD COLUMN publication_type VARCHAR"))
 
 
 ensure_metadata_workflow_columns()

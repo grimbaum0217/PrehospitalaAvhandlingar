@@ -100,9 +100,32 @@ def legacy_lookup_metadata_candidates(thesis: Thesis):
 
 def lookup_metadata_url(url: str):
     candidate = parse_candidate_url(url, SearchQuery())
+    parsed_fields = candidate.get("parsed_fields") or candidate_to_metadata(candidate)
     return {
         "candidate": candidate,
         "candidates": [candidate],
+        "parsed_fields": parsed_fields,
+        "extraction_confidence": candidate.get("extraction_confidence", candidate.get("confidence", 0)),
+        "missing_fields": candidate.get("missing_fields", []),
+        "parser_used": candidate.get("parser_used", "generic"),
+    }
+
+
+def candidate_to_metadata(candidate):
+    return {
+        field: candidate.get(field)
+        for field in [
+            "title",
+            "author",
+            "university",
+            "year",
+            "dissertation_url",
+            "pdf_url",
+            "doi",
+            "urn",
+            "abstract",
+        ]
+        if candidate.get(field) not in [None, ""]
     }
 
 

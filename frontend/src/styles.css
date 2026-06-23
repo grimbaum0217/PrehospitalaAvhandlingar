@@ -659,6 +659,11 @@ a:hover {
   padding-top: 22px;
 }
 
+.metadata-edit-fields {
+  display: grid;
+  gap: 14px;
+}
+
 .metadata-form-grid {
   display: grid;
   gap: 12px;
@@ -739,6 +744,42 @@ a:hover {
   padding: 9px 10px;
 }
 
+.metadata-extraction-review {
+  background: #f8fafc;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.extraction-summary {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.metadata-comparison {
+  display: grid;
+  gap: 1px;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1fr) minmax(0, 1fr) minmax(72px, auto);
+  overflow-wrap: anywhere;
+}
+
+.metadata-comparison > * {
+  background: #ffffff;
+  min-width: 0;
+  padding: 9px 10px;
+}
+
+.metadata-comparison > :nth-child(-n + 4) {
+  color: #475467;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 .candidate-list {
   display: grid;
   gap: 14px;
@@ -806,6 +847,26 @@ a:hover {
   color: #6f3d2e;
   margin: 0;
   padding: 8px 10px;
+}
+
+.lookup-error-summary,
+.library-note {
+  background: #fff8e8;
+  border: 1px solid #e4c77f;
+  border-radius: 6px;
+  color: #6f3d2e;
+  padding: 8px 10px;
+}
+
+.lookup-error-summary ul {
+  color: #475467;
+  font-size: 0.9rem;
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.library-note {
+  margin: 0;
 }
 
 .references-page {
@@ -884,9 +945,14 @@ a:hover {
   .metadata-list,
   .metadata-form-grid,
   .lookup-url-form,
+  .metadata-comparison,
   .discovery-controls,
   .discovery-filters {
     grid-template-columns: 1fr;
+  }
+
+  .extraction-summary {
+    flex-direction: column;
   }
 
   .discovery-controls .wide-control {

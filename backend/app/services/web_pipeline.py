@@ -39,6 +39,11 @@ REPOSITORY_HOSTS = [
     "kth.diva-portal.org",
 ]
 
+REPOSITORY_SEARCH_ENDPOINTS = {
+    "openarchive.ki.se": "https://openarchive.ki.se/search?query={query}",
+    "gupea.ub.gu.se": "https://gupea.ub.gu.se/simple-search?query={query}",
+}
+
 RICH_REPOSITORY_HOSTS = [
     "diva-portal.org",
     "openarchive.ki.se",
@@ -57,6 +62,17 @@ THESIS_MARKERS = [
     "thesis",
     "avhandling",
     "comprehensive summary",
+]
+MANUAL_METADATA_FIELDS = [
+    "title",
+    "author",
+    "university",
+    "year",
+    "dissertation_url",
+    "pdf_url",
+    "doi",
+    "urn",
+    "abstract",
 ]
 
 
@@ -97,7 +113,12 @@ def lookup_thesis_web_candidates(thesis: Thesis) -> dict[str, Any]:
         try:
             parsed = parse_candidate_url(item["url"], query, item.get("source"))
         except MetadataError as exc:
-            errors.append({"source": item.get("source") or "web", "url": item["url"], "error": str(exc)})
+            errors.append({
+                "source": item.get("source") or "web",
+                "url": item["url"],
+                "error": str(exc),
+                "quiet": is_quiet_url_error(exc),
+            })
             continue
         if parsed["classification"] not in {"irrelevant", "journal_article"}:
             parsed_candidates.append(parsed)
@@ -114,7 +135,8 @@ def lookup_thesis_web_candidates(thesis: Thesis) -> dict[str, Any]:
             "queries": generate_search_queries(query),
         },
         "candidates": candidates,
-        "errors": errors,
+        "errors": public_errors(errors),
+        "error_summary": summarize_errors(errors),
     }
 
 
@@ -135,7 +157,12 @@ def collect_candidate_urls(query: SearchQuery) -> tuple[list[dict[str, str]], li
         try:
             candidates.extend(repository_search_candidates(url))
         except MetadataError as exc:
-            errors.append({"source": "repository_search", "url": url, "error": str(exc)})
+            errors.append({
+                "source": "repository_search",
+                "url": url,
+                "error": str(exc),
+                "quiet": is_quiet_url_error(exc),
+            })
 
     candidates.extend(generic_web_search_adapter(query))
 
@@ -162,14 +189,18 @@ def generate_search_queries(query: SearchQuery) -> list[str]:
 def repository_search_urls(query: SearchQuery) -> list[str]:
     title = quote_plus(clean_text(query.title))
     return [
-        f"https://{host}/search?query={title}"
-        for host in REPOSITORY_HOSTS
-        if host not in {"diva-portal.org"}
+        endpoint.format(query=title)
+        for endpoint in REPOSITORY_SEARCH_ENDPOINTS.values()
     ]
 
 
 def repository_search_candidates(search_url: str) -> list[dict[str, str]]:
-    html = fetch_text(search_url)
+    try:
+        html = fetch_text(search_url)
+    except MetadataError as exc:
+        if is_quiet_url_error(exc):
+            return []
+        raise
     parsed = urlparse(search_url)
     base = f"{parsed.scheme}://{parsed.netloc}"
     parser = extract_meta(html)
@@ -188,6 +219,26 @@ def generic_web_search_adapter(query: SearchQuery) -> list[dict[str, str]]:
     # Placeholder for a future web search integration. It should return URLs only;
     # fetched pages still pass through this pipeline's parser, classifier, and ranker.
     return []
+
+
+def is_quiet_url_error(exc: MetadataError) -> bool:
+    message = str(exc).lower()
+    return "404" in message or "not found" in message
+
+
+def public_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [error for error in errors if not error.get("quiet")]
+
+
+def summarize_errors(errors: list[dict[str, Any]]) -> dict[str, Any] | None:
+    repository_errors = [error for error in errors if error.get("source") == "repository_search"]
+    if not repository_errors:
+        return None
+    return {
+        "message": "Some repository searches failed",
+        "count": len(repository_errors),
+        "details": repository_errors,
+    }
 
 
 def is_likely_record_url(url: str | None) -> bool:
@@ -209,6 +260,111 @@ def is_likely_record_url(url: str | None) -> bool:
 
 
 def parse_candidate_url(url: str, query: SearchQuery, source_hint: str | None = None) -> dict[str, Any]:
+    platform = detect_platform(url)
+    if platform:
+        try:
+            return PLATFORM_PARSERS[platform](url, query, source_hint)
+        except MetadataError:
+            return parse_generic_candidate_url(url, query, source_hint, parser_used="generic_fallback")
+    return parse_generic_candidate_url(url, query, source_hint)
+
+
+def detect_platform(url: str) -> str | None:
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    if "diva-portal.org" in host:
+        return "diva"
+    if host == "openarchive.ki.se" or "figshare" in host:
+        return "ki_figshare"
+    if host == "lup.lub.lu.se":
+        return "lup"
+    if host == "gupea.ub.gu.se":
+        return "gupea"
+    if host == "swepub.kb.se":
+        return "swepub"
+    if host == "libris.kb.se":
+        return "libris"
+    return None
+
+
+def parse_diva_url(url: str, query: SearchQuery, source_hint: str | None = None) -> dict[str, Any]:
+    return parse_repository_platform_url(url, query, "diva", source_hint)
+
+
+def parse_ki_figshare_url(url: str, query: SearchQuery, source_hint: str | None = None) -> dict[str, Any]:
+    return parse_repository_platform_url(url, query, "ki_figshare", source_hint)
+
+
+def parse_lup_url(url: str, query: SearchQuery, source_hint: str | None = None) -> dict[str, Any]:
+    return parse_repository_platform_url(url, query, "lup", source_hint)
+
+
+def parse_gupea_url(url: str, query: SearchQuery, source_hint: str | None = None) -> dict[str, Any]:
+    return parse_repository_platform_url(url, query, "gupea", source_hint)
+
+
+def parse_swepub_url(url: str, query: SearchQuery, source_hint: str | None = None) -> dict[str, Any]:
+    return parse_library_platform_url(url, query, "swepub", source_hint)
+
+
+def parse_libris_url(url: str, query: SearchQuery, source_hint: str | None = None) -> dict[str, Any]:
+    return parse_library_platform_url(url, query, "libris", source_hint)
+
+
+PLATFORM_PARSERS = {
+    "diva": parse_diva_url,
+    "ki_figshare": parse_ki_figshare_url,
+    "lup": parse_lup_url,
+    "gupea": parse_gupea_url,
+    "swepub": parse_swepub_url,
+    "libris": parse_libris_url,
+}
+
+
+def parse_repository_platform_url(
+    url: str,
+    query: SearchQuery,
+    platform: str,
+    source_hint: str | None = None,
+) -> dict[str, Any]:
+    return parse_generic_candidate_url(
+        url,
+        query,
+        source_hint or platform_source_hint(platform),
+        parser_used=f"{platform}_parser",
+    )
+
+
+def parse_library_platform_url(
+    url: str,
+    query: SearchQuery,
+    platform: str,
+    source_hint: str | None = None,
+) -> dict[str, Any]:
+    candidate = parse_repository_platform_url(url, query, platform, source_hint)
+    candidate["classification"] = "library_record"
+    candidate["note"] = candidate_note(candidate["classification"], candidate)
+    candidate["confidence"] = rank_candidate(candidate, candidate["classification"], candidate["source_host"], query)
+    return candidate
+
+
+def platform_source_hint(platform: str) -> str:
+    return {
+        "diva": "DiVA",
+        "ki_figshare": "KI Open Archive / Figshare",
+        "lup": "LUP",
+        "gupea": "GUPEA",
+        "swepub": "SwePub",
+        "libris": "LIBRIS",
+    }.get(platform, platform)
+
+
+def parse_generic_candidate_url(
+    url: str,
+    query: SearchQuery,
+    source_hint: str | None = None,
+    parser_used: str = "generic",
+) -> dict[str, Any]:
     html = fetch_text(url)
     parsed_url = urlparse(url)
     host = parsed_url.netloc.lower()
@@ -261,10 +417,53 @@ def parse_candidate_url(url: str, query: SearchQuery, source_hint: str | None = 
             "has_abstract": bool(candidate.get("abstract")),
             "has_pdf": bool(candidate.get("pdf_url")),
             "included_papers": included_papers,
+            "note": candidate_note(classification, candidate),
             "confidence": rank_candidate(candidate, classification, host, query),
+            "extraction_confidence": extraction_confidence(candidate),
+            "missing_fields": missing_fields(candidate),
+            "parser_used": parser_used,
+            "parsed_fields": parsed_fields(candidate),
         }
     )
     return candidate
+
+
+def parsed_fields(candidate: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: candidate.get(field)
+        for field in MANUAL_METADATA_FIELDS
+        if candidate.get(field) not in [None, ""]
+    }
+
+
+def missing_fields(candidate: dict[str, Any]) -> list[str]:
+    return [
+        field
+        for field in MANUAL_METADATA_FIELDS
+        if candidate.get(field) in [None, ""]
+    ]
+
+
+def extraction_confidence(candidate: dict[str, Any]) -> float:
+    field_weight = {
+        "title": 0.16,
+        "author": 0.13,
+        "university": 0.1,
+        "year": 0.09,
+        "dissertation_url": 0.12,
+        "pdf_url": 0.12,
+        "doi": 0.08,
+        "urn": 0.08,
+        "abstract": 0.12,
+    }
+    score = sum(weight for field, weight in field_weight.items() if candidate.get(field))
+    return round(min(score, 1.0), 3)
+
+
+def candidate_note(classification: str, candidate: dict[str, Any]) -> str | None:
+    if classification == "library_record" and not candidate.get("abstract") and not candidate.get("pdf_url"):
+        return "Library record only - no abstract/fulltext found"
+    return None
 
 
 def parse_html_title(html: str) -> str:

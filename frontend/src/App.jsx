@@ -46,8 +46,16 @@ const translations = {
     findDigitalMetadata: "Sök digital metadata",
     candidatesManual: "Kandidater används aldrig utan godkännande.",
     lookupFromUrl: "Sök från URL",
-    pasteDivaUrl: "Klistra in en DiVA-post",
-    lookupUrl: "Hämta URL",
+    pasteDissertationUrl: "Klistra in URL till avhandlingspost",
+    extractMetadata: "Extrahera metadata",
+    extractedMetadata: "Extraherad metadata",
+    currentValue: "Nuvarande",
+    extractedValue: "Extraherat",
+    copyField: "Kopiera",
+    acceptAllFields: "Använd alla fält",
+    parserUsed: "Parser",
+    missingFields: "Saknade fält",
+    noMissingFields: "Inga saknade fält",
     useMetadata: "Använd denna metadata",
     addIncludedPaper: "Lägg till ingående artikel",
     title: "Titel",
@@ -145,6 +153,10 @@ const translations = {
     includedPapersFound: "Ingående artiklar hittade",
     yes: "Ja",
     no: "Nej",
+    someRepositorySearchesFailed: "Vissa repository-sökningar misslyckades",
+    showDetails: "Visa detaljer",
+    hideDetails: "Dölj detaljer",
+    libraryRecordOnly: "Endast bibliotekspost – inget abstrakt/fulltext hittades",
   },
   en: {
     overview: "Statistics",
@@ -189,8 +201,16 @@ const translations = {
     findDigitalMetadata: "Find digital metadata",
     candidatesManual: "Candidates are never applied without approval.",
     lookupFromUrl: "Lookup from URL",
-    pasteDivaUrl: "Paste a DiVA record URL",
-    lookupUrl: "Lookup URL",
+    pasteDissertationUrl: "Paste a dissertation record URL",
+    extractMetadata: "Extract metadata",
+    extractedMetadata: "Extracted metadata",
+    currentValue: "Current",
+    extractedValue: "Extracted",
+    copyField: "Copy",
+    acceptAllFields: "Use all fields",
+    parserUsed: "Parser",
+    missingFields: "Missing fields",
+    noMissingFields: "No missing fields",
     useMetadata: "Use this metadata",
     addIncludedPaper: "Add included paper",
     title: "Title",
@@ -288,6 +308,10 @@ const translations = {
     includedPapersFound: "Included papers found",
     yes: "Yes",
     no: "No",
+    someRepositorySearchesFailed: "Some repository searches failed",
+    showDetails: "Show details",
+    hideDetails: "Hide details",
+    libraryRecordOnly: "Library record only – no abstract/fulltext found",
   },
 };
 
@@ -1442,6 +1466,8 @@ function ThesisDetail({ isAdmin, runningNumber, t }) {
 
 function MetadataEditForm({ onSaved, t, thesis }) {
   const [form, setForm] = useState(metadataFormFromThesis(thesis));
+  const [lookupUrl, setLookupUrl] = useState("");
+  const [extraction, setExtraction] = useState(null);
   const [status, setStatus] = useState("");
 
   useEffect(() => {
@@ -1460,9 +1486,58 @@ function MetadataEditForm({ onSaved, t, thesis }) {
     }
   }
 
+  async function handleUrlExtraction(event) {
+    event.preventDefault();
+    setStatus(t("fetchingUrl"));
+    try {
+      const result = await sendJson("/metadata/lookup-url", "POST", { url: lookupUrl });
+      setExtraction(result);
+      setStatus("");
+    } catch {
+      setStatus(t("urlLookupFailed"));
+    }
+  }
+
+  function copyExtractedField(field) {
+    const value = extraction?.parsed_fields?.[field];
+    if (value === null || value === undefined) return;
+    setForm((current) => ({ ...current, [field]: String(value) }));
+  }
+
+  function acceptAllExtractedFields() {
+    setForm((current) => ({
+      ...current,
+      ...candidateToMetadata(extraction?.parsed_fields ?? extraction?.candidate ?? {}),
+    }));
+  }
+
   return (
-    <form className="metadata-form" onSubmit={handleSubmit}>
+    <section className="metadata-form">
       <h3>{t("editMetadata")}</h3>
+      <form className="lookup-url-form" onSubmit={handleUrlExtraction}>
+        <label>
+          <span>{t("lookupFromUrl")}</span>
+          <input
+            placeholder={t("pasteDissertationUrl")}
+            value={lookupUrl}
+            onChange={(event) => setLookupUrl(event.target.value)}
+          />
+        </label>
+        <button className="secondary-button" type="submit">
+          {t("extractMetadata")}
+        </button>
+      </form>
+      {extraction && (
+        <MetadataExtractionReview
+          extraction={extraction}
+          form={form}
+          onAcceptAll={acceptAllExtractedFields}
+          onCopyField={copyExtractedField}
+          t={t}
+          thesis={thesis}
+        />
+      )}
+      <form className="metadata-edit-fields" onSubmit={handleSubmit}>
       <label>
         <span>{t("abstract")}</span>
         <textarea
@@ -1507,13 +1582,74 @@ function MetadataEditForm({ onSaved, t, thesis }) {
         <button className="primary-button" type="submit">{t("saveMetadata")}</button>
         {status && <span className="form-status">{status}</span>}
       </div>
-    </form>
+      </form>
+    </section>
+  );
+}
+
+function MetadataExtractionReview({ extraction, form, onAcceptAll, onCopyField, t, thesis }) {
+  const parsedFields = extraction.parsed_fields ?? extraction.candidate ?? {};
+  const missingFields = extraction.missing_fields ?? [];
+
+  return (
+    <div className="metadata-extraction-review">
+      <div className="extraction-summary">
+        <div>
+          <h4>{t("extractedMetadata")}</h4>
+          <p className="paper-meta">
+            {t("parserUsed")}: {extraction.parser_used || extraction.candidate?.parser_used || "generic"} ·{" "}
+            {t("confidence")}: {extraction.extraction_confidence ?? extraction.candidate?.extraction_confidence ?? 0}
+          </p>
+        </div>
+        <button className="secondary-button" onClick={onAcceptAll} type="button">
+          {t("acceptAllFields")}
+        </button>
+      </div>
+      <p className="paper-meta">
+        {t("missingFields")}: {missingFields.length ? missingFields.join(", ") : t("noMissingFields")}
+      </p>
+      <div className="metadata-comparison">
+        <span>{t("title")}</span>
+        <span>{t("currentValue")}</span>
+        <span>{t("extractedValue")}</span>
+        <span />
+        {metadataReviewFields.map(({ field, label }) => (
+          <MetadataComparisonRow
+            currentValue={currentMetadataValue(field, form, thesis)}
+            extractedValue={parsedFields[field]}
+            field={field}
+            key={field}
+            label={label(t)}
+            onCopyField={onCopyField}
+            t={t}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MetadataComparisonRow({ currentValue, extractedValue, field, label, onCopyField, t }) {
+  const canCopy = editableMetadataFields.includes(field) && extractedValue !== null && extractedValue !== undefined && extractedValue !== "";
+  return (
+    <>
+      <strong>{label}</strong>
+      <span>{displayMetadataValue(currentValue)}</span>
+      <span>{displayMetadataValue(extractedValue)}</span>
+      <span>
+        {canCopy && (
+          <button className="text-link-button" onClick={() => onCopyField(field)} type="button">
+            {t("copyField")}
+          </button>
+        )}
+      </span>
+    </>
   );
 }
 
 function MetadataLookup({ onChecked, onSaved, runningNumber, t }) {
   const [lookup, setLookup] = useState({ candidates: [], search: null });
-  const [lookupUrl, setLookupUrl] = useState("");
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
   const [status, setStatus] = useState("");
 
   async function handleLookup() {
@@ -1539,26 +1675,6 @@ function MetadataLookup({ onChecked, onSaved, runningNumber, t }) {
     }
   }
 
-  async function handleUrlLookup(event) {
-    event.preventDefault();
-    setStatus(t("fetchingUrl"));
-    try {
-      const result = await sendJson("/metadata/lookup-url", "POST", { url: lookupUrl });
-      setLookup({
-        candidates: result.candidates ?? [result.candidate].filter(Boolean),
-        search: { url: lookupUrl },
-        errors: [],
-      });
-      await sendJson(`/theses/${runningNumber}/metadata-status`, "PATCH", {
-        metadata_status: "candidate_found",
-      });
-      onChecked("candidate_found");
-      setStatus("");
-    } catch {
-      setStatus(t("urlLookupFailed"));
-    }
-  }
-
   return (
     <section className="metadata-lookup">
       <div className="lookup-heading">
@@ -1571,20 +1687,6 @@ function MetadataLookup({ onChecked, onSaved, runningNumber, t }) {
         </button>
       </div>
 
-      <form className="lookup-url-form" onSubmit={handleUrlLookup}>
-        <label>
-          <span>{t("lookupFromUrl")}</span>
-          <input
-            placeholder={t("pasteDivaUrl")}
-            value={lookupUrl}
-            onChange={(event) => setLookupUrl(event.target.value)}
-          />
-        </label>
-        <button className="secondary-button" type="submit">
-          {t("lookupUrl")}
-        </button>
-      </form>
-
       {status && <p className="status">{status}</p>}
       {lookup.errors?.length > 0 && (
         <div className="lookup-errors">
@@ -1593,6 +1695,29 @@ function MetadataLookup({ onChecked, onSaved, runningNumber, t }) {
               {error.source}: {error.error}
             </p>
           ))}
+        </div>
+      )}
+      {lookup.error_summary && (
+        <div className="lookup-error-summary">
+          <p className="status">
+            {t("someRepositorySearchesFailed")} ({lookup.error_summary.count})
+          </p>
+          <button
+            className="text-link-button"
+            onClick={() => setShowErrorDetails((current) => !current)}
+            type="button"
+          >
+            {showErrorDetails ? t("hideDetails") : t("showDetails")}
+          </button>
+          {showErrorDetails && (
+            <ul>
+              {lookup.error_summary.details.map((error, index) => (
+                <li key={`${error.url}-${index}`}>
+                  {error.url}: {error.error}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       {lookup.candidates.length > 0 && (
@@ -1612,6 +1737,13 @@ function MetadataLookup({ onChecked, onSaved, runningNumber, t }) {
                   .filter(Boolean)
                   .join(" · ")}
               </p>
+              {candidate.note && (
+                <p className="library-note">
+                  {candidate.note.startsWith("Library record only")
+                    ? t("libraryRecordOnly")
+                    : candidate.note}
+                </p>
+              )}
               <dl className="metadata-list">
                 {candidate.parsed_title && (
                   <div>
@@ -1852,6 +1984,30 @@ function encodePathValue(value) {
 
 function doiUrl(doi) {
   return doi.startsWith("http") ? doi : `https://doi.org/${doi}`;
+}
+
+const editableMetadataFields = ["abstract", "dissertation_url", "pdf_url", "doi", "urn"];
+
+const metadataReviewFields = [
+  { field: "title", label: (t) => t("title") },
+  { field: "author", label: (t) => t("author") },
+  { field: "university", label: (t) => t("university") },
+  { field: "year", label: (t) => t("year") },
+  { field: "abstract", label: (t) => t("abstract") },
+  { field: "dissertation_url", label: (t) => t("dissertationUrl") },
+  { field: "pdf_url", label: () => "PDF URL" },
+  { field: "doi", label: () => "DOI" },
+  { field: "urn", label: () => "URN" },
+];
+
+function currentMetadataValue(field, form, thesis) {
+  if (field in form) return form[field];
+  return thesis?.[field];
+}
+
+function displayMetadataValue(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  return String(value);
 }
 
 function metadataFormFromThesis(thesis) {

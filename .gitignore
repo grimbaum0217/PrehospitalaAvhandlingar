@@ -8,3 +8,9 @@ data/processed/*
 backend/data/*.db
 backend/.venv/
 .pnpm-store/
+backend/data/*.db
+backend/data/app.db
+backend/data/*.db
+backend/data/*.db-journal
+backend/data/*.sqlite
+backend/data/*.sqlite3

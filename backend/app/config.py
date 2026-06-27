@@ -21,8 +21,20 @@ class Settings:
 
 def load_settings(environ: dict[str, str] | None = None) -> Settings:
     values = os.environ if environ is None else environ
+    railway_environment = any(
+        values.get(name)
+        for name in (
+            "RAILWAY_ENVIRONMENT",
+            "RAILWAY_ENVIRONMENT_NAME",
+            "RAILWAY_PROJECT_ID",
+            "RAILWAY_SERVICE_ID",
+            "RAILWAY_PUBLIC_DOMAIN",
+            "RAILWAY_STATIC_URL",
+        )
+    )
+    app_env = "production" if railway_environment else (values.get("APP_ENV") or "development").strip().lower()
     settings = Settings(
-        app_env=(values.get("APP_ENV") or "development").strip().lower(),
+        app_env=app_env,
         auth_enabled=(values.get("AUTH_ENABLED") or "false").strip().lower() in TRUE_VALUES,
         site_password=values.get("SITE_PASSWORD") or "",
         session_secret=values.get("SESSION_SECRET") or "",

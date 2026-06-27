@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException, Request
@@ -33,6 +34,7 @@ METADATA_STATUSES = {
     "not_found",
     "needs_review",
 }
+logger = logging.getLogger(__name__)
 
 
 def utcnow():
@@ -650,7 +652,6 @@ def create_application(api_application, app_settings, static_dir: Path = STATIC_
         openapi_url=None,
     )
     application.state.settings = app_settings
-    application.add_middleware(SiteAuthMiddleware, settings=app_settings)
     application.mount("/api", api_application)
 
     @application.get("/login")
@@ -682,8 +683,11 @@ def create_application(api_application, app_settings, static_dir: Path = STATIC_
             return FileResponse(index_path)
         return {"status": "running", "frontend": "Use the Vite development server locally"}
 
-    return application
+    # This wrapper is deliberately outside the completed FastAPI router. It is
+    # therefore always evaluated before API mounts, StaticFiles and SPA fallback.
+    return SiteAuthMiddleware(application, app_settings)
 
 
 settings = load_settings()
+logger.info("Application environment=%s authentication_enabled=%s", settings.app_env, settings.auth_enabled)
 app = create_application(api_app, settings)

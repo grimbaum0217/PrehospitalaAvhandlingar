@@ -112,6 +112,7 @@ class SiteAuthMiddleware:
     def __init__(self, app, settings: Settings):
         self.app = app
         self.settings = settings
+        self.state = getattr(app, "state", None)
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or not self.settings.auth_enabled:

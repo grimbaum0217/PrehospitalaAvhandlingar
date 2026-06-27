@@ -91,6 +91,16 @@ class DeploymentTests(unittest.TestCase):
             with self.subTest(environment=environment), self.assertRaises(RuntimeError):
                 load_settings(environment)
 
+    def test_railway_is_always_treated_as_production(self):
+        with self.assertRaises(RuntimeError):
+            load_settings(
+                {
+                    "RAILWAY_PROJECT_ID": "project-id",
+                    "APP_ENV": "development",
+                    "AUTH_ENABLED": "false",
+                }
+            )
+
     def test_development_defaults_to_auth_disabled(self):
         settings = load_settings({})
         self.assertEqual(settings.app_env, "development")
@@ -201,9 +211,17 @@ class DeploymentTests(unittest.TestCase):
             app = create_application(api, Settings("test", True, "test-password", "session-secret"), static_dir)
 
             self.assertEqual(response_status(asyncio.run(call_asgi(app, "/"))), 303)
+            statistics = asyncio.run(call_asgi(app, "/statistics"))
+            self.assertEqual(response_status(statistics), 303)
+            self.assertEqual(response_headers(statistics)["location"], "/login")
             self.assertEqual(response_status(asyncio.run(call_asgi(app, "/api/data"))), 401)
             self.assertEqual(response_status(asyncio.run(call_asgi(app, "/api/health"))), 200)
+            self.assertEqual(response_status(asyncio.run(call_asgi(app, "/login"))), 200)
             self.assertEqual(response_status(asyncio.run(call_asgi(app, "/assets/app.js"))), 303)
+            self.assertEqual(
+                response_status(asyncio.run(call_asgi(app, "/", "manipulated-cookie"))),
+                303,
+            )
 
             login = asyncio.run(
                 call_asgi(

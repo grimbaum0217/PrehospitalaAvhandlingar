@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from urllib.parse import quote_plus, urlparse
+import logging
+from urllib.parse import parse_qs, quote_plus, unquote, urlencode, urlparse
 
 from app.providers.common import (
     MetadataError,
@@ -21,6 +22,15 @@ from app.providers.common import (
 
 SOURCE = "DiVA"
 PORTAL_HOST = "www.diva-portal.org"
+KNOWN_DIVA_HOSTS = [
+    "lnu.diva-portal.org",
+    "hb.diva-portal.org",
+    "oru.diva-portal.org",
+    "umu.diva-portal.org",
+    "uu.diva-portal.org",
+    "liu.diva-portal.org",
+    "lu.diva-portal.org",
+]
 DISSERTATION_PUBLICATION_TYPES = [
     "monographDoctoralThesis",
     "comprehensiveDoctoralThesis",
@@ -38,6 +48,7 @@ THESIS_TYPE_LABELS = [
     "monograph licentiate thesis",
     "dissertation",
 ]
+logger = logging.getLogger(__name__)
 
 UNIVERSITY_HOSTS = {
     "orebro universitet": ["oru.diva-portal.org"],
@@ -61,6 +72,9 @@ UNIVERSITY_HOSTS = {
     "linköping university": ["liu.diva-portal.org"],
     "lunds universitet": ["lup.lub.lu.se", "lu.diva-portal.org"],
     "lund university": ["lup.lub.lu.se", "lu.diva-portal.org"],
+    "linneuniversitetet": ["lnu.diva-portal.org"],
+    "linnaeus university": ["lnu.diva-portal.org"],
+    "lnu": ["lnu.diva-portal.org"],
 }
 
 
@@ -94,33 +108,44 @@ def search(query: SearchQuery, limit: int = 5) -> list[dict]:
 
 def search_host(host: str, query: SearchQuery, limit: int) -> list[dict]:
     urls = []
+    row_limit = max(limit, 50) if query.author else limit
     for search_text in search_texts(query):
+        params = {
+            "query": search_text,
+            "language": "en",
+            "searchType": "SIMPLE",
+            "noOfRows": row_limit,
+            "sortOrder": "relevance_sort_desc",
+            "publicationTypeCode": DISSERTATION_PUBLICATION_TYPES,
+        }
+        log_search_request(host, params)
         html = fetch_text(
             search_url(host),
-            params={
-                "query": search_text,
-                "language": "en",
-                "searchType": "SIMPLE",
-                "noOfRows": limit,
-                "sortOrder": "relevance_sort_desc",
-                "publicationTypeCode": DISSERTATION_PUBLICATION_TYPES,
-            },
+            params=params,
         )
-        for url in find_record_urls(html, host):
+        # DiVA's simple search may ignore publicationTypeCode and return articles.
+        # Prefer result rows that explicitly identify a thesis before opening
+        # individual record pages; fall back for older/simpler DiVA markup.
+        record_urls = find_dissertation_record_urls(html, host) or find_record_urls(html, host)
+        log_raw_results(host, record_urls)
+        for url in record_urls:
             if url not in urls:
                 urls.append(url)
         if urls:
             break
 
     candidates = []
-    for record_url in urls[:limit]:
+    record_scan_limit = row_limit if query.author else limit
+    for record_url in urls[:record_scan_limit]:
         candidate = record_candidate(record_url, query)
         if is_dissertation_candidate(candidate):
             candidates.append(candidate)
-    return candidates
+    return candidates[:limit]
 
 
 def search_texts(query: SearchQuery) -> list[str]:
+    if clean_text(query.author) and not clean_text(query.title):
+        return author_search_texts(query.author)
     variants = [
         " ".join(clean_text(value) for value in [query.title, query.author, query.year] if clean_text(value)),
         " ".join(clean_text(value) for value in [query.title, query.author] if clean_text(value)),
@@ -131,13 +156,62 @@ def search_texts(query: SearchQuery) -> list[str]:
     return [variant for index, variant in enumerate(variants) if variant and variant not in variants[:index]]
 
 
+def author_search_texts(author: str | None) -> list[str]:
+    text = clean_text(author)
+    if not text:
+        return []
+    if "," in text:
+        family, given = [part.strip() for part in text.split(",", 1)]
+    else:
+        parts = text.split()
+        given = parts[0] if parts else ""
+        family = " ".join(parts[1:]) if len(parts) > 1 else ""
+    variants = [text]
+    if given and family:
+        variants.extend(
+            [
+                f"{given} {family}",
+                f"{family} {given}",
+                f"{family}, {given}",
+            ]
+        )
+    return [variant for index, variant in enumerate(variants) if variant and variant not in variants[:index]]
+
+
 def find_record_urls(html: str, host: str = PORTAL_HOST) -> list[str]:
     urls = []
-    for href in re.findall(r'href=["\']([^"\']*record\.jsf\?pid=[^"\']+)["\']', html):
-        url = absolute_url(f"https://{host}", href.replace("&amp;", "&"))
+    for href in re.findall(r'href=["\']([^"\']*record\.jsf\?[^"\']*pid=[^"\']+)["\']', html):
+        url = canonical_record_url(absolute_url(f"https://{host}", href.replace("&amp;", "&")))
         if url and url not in urls:
             urls.append(url)
     return urls
+
+
+def find_dissertation_record_urls(html: str, host: str = PORTAL_HOST) -> list[str]:
+    urls = []
+    result_rows = re.findall(
+        r'<li\b[^>]*class=["\'][^"\']*ui-datalist-item[^"\']*["\'][^>]*>(.*?)</li>',
+        html,
+        flags=re.I | re.S,
+    )
+    for row in result_rows:
+        row_text = clean_text(re.sub(r"<[^>]+>", " ", row)).lower()
+        if not any(label in row_text for label in THESIS_TYPE_LABELS):
+            continue
+        for url in find_record_urls(row, host):
+            if url not in urls:
+                urls.append(url)
+    return urls
+
+
+def canonical_record_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    parsed = urlparse(url)
+    pid = parse_qs(parsed.query).get("pid", [None])[0]
+    if not pid:
+        return url
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{urlencode({'pid': pid})}"
 
 
 def record_candidate(record_url: str, query: SearchQuery) -> dict:
@@ -219,6 +293,7 @@ def record_candidate(record_url: str, query: SearchQuery) -> dict:
     )
     candidate["source_url"] = record_url
     candidate["publication_type"] = clean_text(publication_type) or None
+    candidate["keywords"] = first_value(meta, ["keywords", "DC.Subject", "DC.subject", "dc.subject"])
     if abstract:
         candidate["abstract"] = clean_text(abstract)
     candidate["confidence"] = round(score_candidate(candidate, query), 3)
@@ -227,6 +302,79 @@ def record_candidate(record_url: str, query: SearchQuery) -> dict:
 
 def search_url_for_debug(query: SearchQuery) -> str:
     return f"{search_url(PORTAL_HOST)}?query={quote_plus(query.as_text())}"
+
+
+def search_request_urls_for_debug(host: str, query: SearchQuery, limit: int = 50) -> list[str]:
+    urls = []
+    for search_text in search_texts(query):
+        params = {
+            "query": search_text,
+            "language": "en",
+            "searchType": "SIMPLE",
+            "noOfRows": max(limit, 50) if query.author else limit,
+            "sortOrder": "relevance_sort_desc",
+            "publicationTypeCode": DISSERTATION_PUBLICATION_TYPES,
+        }
+        urls.append(f"{search_url(host)}?{urlencode(params, doseq=True)}")
+    return urls
+
+
+def all_known_hosts() -> list[str]:
+    hosts = []
+    for host in KNOWN_DIVA_HOSTS:
+        if host not in hosts:
+            hosts.append(host)
+    for mapped_hosts in UNIVERSITY_HOSTS.values():
+        for host in mapped_hosts:
+            if host.endswith(".diva-portal.org") and host not in hosts:
+                hosts.append(host)
+    return hosts
+
+
+def pid_from_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    parsed = urlparse(url)
+    pid = parse_qs(parsed.query).get("pid", [None])[0]
+    return pid
+
+
+def direct_record_url(value: str | None) -> str | None:
+    text = clean_text(value)
+    if not text:
+        return None
+
+    decoded = unquote(text)
+    pid_match = re.search(r"\bdiva2:\d+\b", decoded, flags=re.I)
+    if not pid_match:
+        return None
+    pid = pid_match.group(0).lower()
+
+    if decoded.lower().startswith(("http://", "https://")):
+        parsed = urlparse(decoded)
+        if not (parsed.netloc.endswith(".diva-portal.org") or parsed.netloc == PORTAL_HOST):
+            return None
+        host = parsed.netloc
+    else:
+        host = PORTAL_HOST
+    return f"https://{host}/smash/record.jsf?{urlencode({'pid': pid})}"
+
+
+def looks_like_direct_reference(value: str | None) -> bool:
+    text = clean_text(value).lower()
+    return text.startswith(("http://", "https://", "diva2"))
+
+
+def log_search_request(host: str, params: dict) -> None:
+    logger.info(
+        "[discovery:diva] request "
+        f"{search_url(host)}?{urlencode(params, doseq=True)}"
+    )
+
+
+def log_raw_results(host: str, urls: list[str]) -> None:
+    pids = [pid_from_url(url) for url in urls]
+    logger.info("[discovery:diva] raw_results host=%s count=%s pids=%s", host, len(urls), pids)
 
 
 def lookup_url(url: str, query: SearchQuery | None = None) -> dict:

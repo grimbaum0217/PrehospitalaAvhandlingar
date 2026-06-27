@@ -78,6 +78,9 @@ class DivaLookupTests(unittest.TestCase):
 
         def fake_fetch(url, params=None):
             calls.append(url)
+            if params:
+                self.assertIn("publicationTypeCode", params)
+                self.assertIn("monographDoctoralThesis", params["publicationTypeCode"])
             if "resultList.jsf" in url:
                 return result_page(ULF_URL)
             return record_page(query.title, "Andersson, Ulf", "University of Borås", 2023, "hb.diva-portal.org")
@@ -87,6 +90,59 @@ class DivaLookupTests(unittest.TestCase):
 
         self.assertEqual(candidates[0]["source_host"], "hb.diva-portal.org")
         self.assertTrue(calls[0].startswith("https://hb.diva-portal.org/"))
+
+    def test_hanna_maurin_soderholm_known_person_search_returns_hb_thesis(self):
+        hanna_url = "https://hb.diva-portal.org/smash/record.jsf?pid=diva2%3A877048"
+        title = "Emergency visualized : exploring visual technology for paramedic-physician collaboration in emergency care"
+        query = SearchQuery(author="Hanna Maurin Söderholm")
+
+        def fake_fetch(url, params=None):
+            if "resultList.jsf" in url:
+                if "hb.diva-portal.org" in url:
+                    return result_page(hanna_url)
+                return "<html><body></body></html>"
+            return record_page(title, "Maurin Söderholm, Hanna", "Högskolan i Borås", 2015, "hb.diva-portal.org")
+
+        with patch("app.providers.diva.fetch_text", side_effect=fake_fetch):
+            candidates = diva.search_host("hb.diva-portal.org", query, 5)
+
+        self.assertEqual(candidates[0]["dissertation_url"], hanna_url)
+        self.assertEqual(candidates[0]["source_host"], "hb.diva-portal.org")
+        self.assertEqual(candidates[0]["publication_type"], "dissertation")
+
+    def test_result_urls_parse_when_pid_is_not_first_query_param(self):
+        html = """
+        <html><body>
+          <a href="/smash/record.jsf?dswid=8008&amp;pid=diva2%3A877048&amp;c=14&amp;language=sv">
+            Emergency visualized
+          </a>
+        </body></html>
+        """
+
+        urls = diva.find_record_urls(html, "hb.diva-portal.org")
+
+        self.assertEqual(urls, ["https://hb.diva-portal.org/smash/record.jsf?pid=diva2%3A877048"])
+
+    def test_result_page_prefilters_articles_before_record_fetch(self):
+        html = """
+        <ul>
+          <li class="ui-datalist-item">
+            <a href="/smash/record.jsf?pid=diva2%3A111">Journal article</a>
+            <span>Article in journal (Refereed)</span>
+          </li>
+          <li class="ui-datalist-item">
+            <a href="/smash/record.jsf?pid=diva2%3A432398">Akut omhändertagande</a>
+            <span>Doctoral thesis, comprehensive summary</span>
+          </li>
+        </ul>
+        """
+
+        urls = diva.find_dissertation_record_urls(html, "lnu.diva-portal.org")
+
+        self.assertEqual(
+            urls,
+            ["https://lnu.diva-portal.org/smash/record.jsf?pid=diva2%3A432398"],
+        )
 
     def test_agnes_olander_search_uses_boras_diva_host_first(self):
         query = SearchQuery(

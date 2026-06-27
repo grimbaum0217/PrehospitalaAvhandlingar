@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
 const translations = {
   sv: {
@@ -29,6 +29,11 @@ const translations = {
     category: "Kategori",
     university: "Lärosäte",
     profession: "Profession",
+    selectProfession: "Välj profession",
+    addNewProfession: "Lägg till ny profession",
+    newProfession: "Ny profession",
+    professionRequired: "Profession krävs.",
+    confirmCreateProfession: "Skapa ny profession?",
     year: "År",
     all: "Alla",
     backToAllTheses: "Till alla avhandlingar",
@@ -125,15 +130,29 @@ const translations = {
     awaitingReview: "Väntar granskning",
     approvedNewTheses: "Godkända nya avhandlingar",
     rejectedCandidates: "Avvisade kandidater",
+    activeCandidates: "Aktiva",
+    classificationQueue: "Klassificering",
+    needsClassification: "Behöver klassificeras",
+    noClassificationQueue: "Inga avhandlingar behöver klassificeras.",
+    saveClassification: "Spara klassificering",
+    classificationSaved: "Klassificering sparad.",
+    classificationSaveFailed: "Kunde inte spara klassificering.",
+    selectCategory: "Välj huvudtema",
+    selectSubcategory: "Välj subtema",
+    categoryRequired: "Huvudtema krävs.",
+    subcategoryRequired: "Subtema krävs.",
     candidateDetails: "Kandidatdetaljer",
+    reviewCandidate: "Granska",
+    candidateReview: "Kandidatgranskning",
     sourceUrl: "Käll-URL",
+    pdfUrl: "PDF-URL",
     emsMatchReason: "Varför EMS/prehospital",
     yearFrom: "Från år",
     yearTo: "Till år",
     source: "Källa",
     keywordGroup: "Nyckelordsgrupp",
     knownPerson: "Känd person",
-    knownPersonPlaceholder: "Ex. Hanna Maurin Söderholm",
+    knownPersonPlaceholder: "Namn, DiVA-URL eller diva2-ID",
     allSources: "Alla källor",
     allKeywords: "Alla nyckelord",
     swedishKeywords: "Svenska",
@@ -142,6 +161,9 @@ const translations = {
     newCandidate: "Ny kandidat",
     possibleDuplicate: "Möjlig dubblett",
     alreadyInDatabase: "Finns redan i databasen",
+    matchStatus: "Matchstatus",
+    relevanceStatus: "Beslut",
+    createdThesis: "Skapad avhandling",
     includeAlreadyKnown: "Visa redan kända träffar",
     matchedKeywords: "Matchade nyckelord",
     possibleDuplicateWarning: "Möjlig dubblett",
@@ -152,6 +174,8 @@ const translations = {
     needsReviewAction: "Behöver granskas",
     approved: "Godkänd",
     rejected: "Avvisad",
+    active: "Aktiva",
+    approveDuplicateConfirm: "Den här kandidaten är markerad som möjlig dubblett. Vill du ändå skapa en ny avhandling?",
     discoveryStored: "Sparade kandidater",
     skippedKnown: "Hoppade över kända",
     parsedTitle: "Tolkad titel",
@@ -193,6 +217,11 @@ const translations = {
     category: "Category",
     university: "University",
     profession: "Profession",
+    selectProfession: "Select profession",
+    addNewProfession: "Add new profession",
+    newProfession: "New profession",
+    professionRequired: "Profession is required.",
+    confirmCreateProfession: "Create new profession?",
     year: "Year",
     all: "All",
     backToAllTheses: "Back to all dissertations",
@@ -289,15 +318,29 @@ const translations = {
     awaitingReview: "Awaiting review",
     approvedNewTheses: "Approved new theses",
     rejectedCandidates: "Rejected candidates",
+    activeCandidates: "Active",
+    classificationQueue: "Classification",
+    needsClassification: "Needs classification",
+    noClassificationQueue: "No theses need classification.",
+    saveClassification: "Save classification",
+    classificationSaved: "Classification saved.",
+    classificationSaveFailed: "Could not save classification.",
+    selectCategory: "Select category",
+    selectSubcategory: "Select subcategory",
+    categoryRequired: "Category is required.",
+    subcategoryRequired: "Subcategory is required.",
     candidateDetails: "Candidate details",
+    reviewCandidate: "Review",
+    candidateReview: "Candidate review",
     sourceUrl: "Source URL",
+    pdfUrl: "PDF URL",
     emsMatchReason: "Why EMS/prehospital",
     yearFrom: "From year",
     yearTo: "To year",
     source: "Source",
     keywordGroup: "Keyword group",
     knownPerson: "Known person",
-    knownPersonPlaceholder: "E.g. Hanna Maurin Söderholm",
+    knownPersonPlaceholder: "Name, DiVA URL or diva2 ID",
     allSources: "All sources",
     allKeywords: "All keywords",
     swedishKeywords: "Swedish",
@@ -306,6 +349,9 @@ const translations = {
     newCandidate: "New candidate",
     possibleDuplicate: "Possible duplicate",
     alreadyInDatabase: "Already in database",
+    matchStatus: "Match status",
+    relevanceStatus: "Decision",
+    createdThesis: "Created thesis",
     includeAlreadyKnown: "Show already known matches",
     matchedKeywords: "Matched keywords",
     possibleDuplicateWarning: "Possible duplicate",
@@ -316,6 +362,8 @@ const translations = {
     needsReviewAction: "Needs review",
     approved: "Approved",
     rejected: "Rejected",
+    active: "Active",
+    approveDuplicateConfirm: "This candidate is marked as a possible duplicate. Create a new thesis anyway?",
     discoveryStored: "Stored candidates",
     skippedKnown: "Skipped known",
     parsedTitle: "Parsed title",
@@ -365,6 +413,10 @@ function navigate(path, isAdmin = false) {
 function adminPath(path) {
   if (path === "/") return "/admin";
   return `/admin${path}`;
+}
+
+function statisticsPath(isAdmin) {
+  return isAdmin ? "/admin/statistics" : "/";
 }
 
 function useRoute() {
@@ -426,7 +478,12 @@ function App() {
   const path = useRoute();
   const [language, setLanguageState] = useState(() => localStorage.getItem("language") || "sv");
   const isAdmin = path === "/admin" || path.startsWith("/admin/");
-  const contentPath = isAdmin ? path.replace(/^\/admin/, "") || "/theses" : path;
+  const adminContentPath = path.replace(/^\/admin/, "");
+  const contentPath = isAdmin
+    ? adminContentPath === "/statistics"
+      ? "/"
+      : adminContentPath || "/theses"
+    : path;
   const detailMatch = contentPath.match(/^\/theses\/(\d+)$/);
   const filteredMatch = contentPath.match(/^\/(year|university|profession|category)\/(.+)$/);
   const researchAreaMatch = contentPath.match(/^\/research-areas\/([A-I])$/);
@@ -444,7 +501,10 @@ function App() {
           Prehospitala Avhandlingar
         </button>
         <nav aria-label="Primary navigation">
-          <button className={contentPath === "/" ? "active" : ""} onClick={() => navigate("/", isAdmin)}>
+          <button
+            className={contentPath === "/" ? "active" : ""}
+            onClick={() => navigate(statisticsPath(isAdmin))}
+          >
             {t("overview")}
           </button>
           <button
@@ -473,6 +533,14 @@ function App() {
               {t("discovery")}
             </button>
           )}
+          {isAdmin && (
+            <button
+              className={contentPath === "/classification" ? "active" : ""}
+              onClick={() => navigate("/classification", true)}
+            >
+              {t("classificationQueue")}
+            </button>
+          )}
         </nav>
         <div className="header-actions">
           <button className={isAdmin ? "active" : ""} onClick={() => navigate("/theses", !isAdmin)}>
@@ -497,6 +565,7 @@ function App() {
         {researchAreaMatch && <ResearchAreasPage categoryId={researchAreaMatch[1]} isAdmin={isAdmin} t={t} />}
         {contentPath === "/references" && <ReferencesPage t={t} />}
         {isAdmin && contentPath === "/discovery" && <DiscoveryPage t={t} />}
+        {isAdmin && contentPath === "/classification" && <ClassificationPage t={t} />}
         {detailMatch && <ThesisDetail isAdmin={isAdmin} runningNumber={detailMatch[1]} t={t} />}
         {filteredMatch && (
           <FilteredThesesPage
@@ -991,50 +1060,87 @@ function DiscoveryPage({ t }) {
     university: "",
   });
   const [filters, setFilters] = useState({
-    match_status: "all",
-    include_known: false,
+    status_filter: "active",
   });
   const [summary, setSummary] = useState(null);
   const [candidates, setCandidates] = useState([]);
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [status, setStatus] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [includeKnownResults, setIncludeKnownResults] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams();
-    params.set("match_status", filters.match_status);
-    params.set("include_known", filters.include_known ? "true" : "false");
+    params.set("status_filter", filters.status_filter);
+    params.set("include_known", includeKnownResults ? "true" : "false");
 
     fetchJson(`/discovery/candidates?${params.toString()}`)
-      .then((data) => setCandidates(data))
+      .then((data) => {
+        setCandidates(data);
+        setSelectedCandidate((current) =>
+          current && data.some((candidate) => candidate.id === current.id) ? current : null
+        );
+      })
       .catch(() => setStatus(t("couldNotLoadData")));
     fetchJson("/discovery/summary")
       .then((data) => setSummary(data))
       .catch(() => setStatus(t("couldNotLoadData")));
-  }, [filters, reloadKey]);
+  }, [filters, includeKnownResults, reloadKey]);
 
   async function handleSearch(event) {
     event.preventDefault();
     setStatus(t("searching"));
+    const isKnownPersonSearch = Boolean(searchForm.known_person.trim());
     try {
       const result = await sendJson("/discovery/search", "POST", {
         ...searchForm,
-        show_known_matches: filters.include_known,
+        show_known_matches: isKnownPersonSearch,
       });
-      setStatus(`${t("discoveryStored")}: ${result.stored}. ${t("skippedKnown")}: ${result.skipped_known}.`);
+      setIncludeKnownResults(isKnownPersonSearch);
+      setStatus(
+        result.errors?.length && !result.discovered
+          ? t("someRepositorySearchesFailed")
+          : `${t("discoveryStored")}: ${result.stored}. ${t("skippedKnown")}: ${result.skipped_known}.${
+              result.errors?.length ? ` ${t("someRepositorySearchesFailed")}` : ""
+            }`
+      );
       setReloadKey((current) => current + 1);
     } catch {
       setStatus(t("lookupFailed"));
     }
   }
 
-  async function updateCandidate(candidateId, reviewStatus) {
+  async function updateCandidate(candidate, reviewStatus) {
+    const confirmDuplicate =
+      reviewStatus === "approved" &&
+      candidate.match_status === "possible_duplicate" &&
+      window.confirm(t("approveDuplicateConfirm"));
+    if (
+      reviewStatus === "approved" &&
+      candidate.match_status === "possible_duplicate" &&
+      !confirmDuplicate
+    ) {
+      return;
+    }
+
     try {
-      const saved = await sendJson(`/discovery/candidates/${candidateId}`, "PATCH", {
+      const saved = await sendJson(`/discovery/candidates/${candidate.id}`, "PATCH", {
         review_status: reviewStatus,
+        confirm_duplicate: Boolean(confirmDuplicate),
       });
+      const shouldHide =
+        filters.status_filter === "active" &&
+        (saved.relevance_status === "approved" || saved.relevance_status === "rejected");
       setCandidates((current) =>
-        current.map((candidate) => (candidate.id === candidateId ? saved : candidate))
+        shouldHide
+          ? current.filter((item) => item.id !== candidate.id)
+          : current.map((item) => (item.id === candidate.id ? saved : item))
       );
+      setSelectedCandidate((current) => {
+        if (!current || current.id !== candidate.id) return current;
+        return shouldHide ? null : saved;
+      });
+      setReloadKey((current) => current + 1);
     } catch {
       setStatus(t("statusUpdateFailed"));
     }
@@ -1133,32 +1239,35 @@ function DiscoveryPage({ t }) {
         </div>
       </form>
 
-      <div className="discovery-filters">
-        <SelectFilter
-          label={t("metadataStatus")}
-          value={filters.match_status}
-          options={[
-            { value: "all", label: t("allMatches") },
-            { value: "new_candidate", label: t("newCandidate") },
-            { value: "possible_duplicate", label: t("possibleDuplicate") },
-            { value: "already_in_database", label: t("alreadyInDatabase") },
-          ]}
-          onChange={(value) => setFilters((current) => ({ ...current, match_status: value }))}
-          t={t}
-        />
-        <label className="checkbox-filter">
-          <input
-            checked={filters.include_known}
-            onChange={(event) =>
-              setFilters((current) => ({ ...current, include_known: event.target.checked }))
-            }
-            type="checkbox"
-          />
-          <span>{t("includeAlreadyKnown")}</span>
-        </label>
+      <div className="discovery-filters discovery-tabs" aria-label={t("metadataStatus")}>
+        {[
+          ["active", t("active")],
+          ["approved", t("approved")],
+          ["rejected", t("rejected")],
+          ["all", t("all")],
+        ].map(([value, label]) => (
+          <button
+            className={filters.status_filter === value ? "active" : ""}
+            key={value}
+            onClick={() => setFilters({ status_filter: value })}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {status && <p className="status">{status}</p>}
+
+      {selectedCandidate && (
+        <CandidateReviewPanel
+          candidate={selectedCandidate}
+          onApprove={() => updateCandidate(selectedCandidate, "approved")}
+          onNeedsReview={() => updateCandidate(selectedCandidate, "needs_review")}
+          onReject={() => updateCandidate(selectedCandidate, "rejected")}
+          t={t}
+        />
+      )}
 
       <div className="candidate-list">
         {candidates.map((candidate) => (
@@ -1241,21 +1350,28 @@ function DiscoveryPage({ t }) {
               <button
                 className="primary-button"
                 disabled={candidate.match_status === "already_in_database"}
-                onClick={() => updateCandidate(candidate.id, "approved")}
+                onClick={() => updateCandidate(candidate, "approved")}
                 type="button"
               >
                 {t("approve")}
               </button>
               <button
                 className="secondary-button"
-                onClick={() => updateCandidate(candidate.id, "needs_review")}
+                onClick={() => setSelectedCandidate(candidate)}
+                type="button"
+              >
+                {t("reviewCandidate")}
+              </button>
+              <button
+                className="secondary-button"
+                onClick={() => updateCandidate(candidate, "needs_review")}
                 type="button"
               >
                 {t("needsReviewAction")}
               </button>
               <button
                 className="secondary-button"
-                onClick={() => updateCandidate(candidate.id, "rejected")}
+                onClick={() => updateCandidate(candidate, "rejected")}
                 type="button"
               >
                 {t("reject")}
@@ -1275,6 +1391,392 @@ function SummaryTile({ label, value }) {
       <strong>{value ?? 0}</strong>
       <span>{label}</span>
     </div>
+  );
+}
+
+function CandidateReviewPanel({ candidate, onApprove, onNeedsReview, onReject, t }) {
+  return (
+    <article className="candidate-review-panel">
+      <div className="candidate-heading">
+        <div>
+          <p className="eyebrow">{t("candidateReview")}</p>
+          <h3>{candidate.title}</h3>
+          <p className="paper-meta">
+            {[candidate.author, candidate.university, candidate.year, candidate.source]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+        <span className={`metadata-status-badge status-${candidate.match_status}`}>
+          {discoveryMatchLabel(candidate.match_status, t)}
+        </span>
+      </div>
+
+      <dl className="candidate-detail-list">
+        <div>
+          <dt>{t("title")}</dt>
+          <dd>{candidate.title || "-"}</dd>
+        </div>
+        <div>
+          <dt>{t("author")}</dt>
+          <dd>{candidate.author || "-"}</dd>
+        </div>
+        <div>
+          <dt>{t("year")}</dt>
+          <dd>{candidate.year || "-"}</dd>
+        </div>
+        <div>
+          <dt>{t("university")}</dt>
+          <dd>{candidate.university || "-"}</dd>
+        </div>
+        <div>
+          <dt>{t("source")}</dt>
+          <dd>{[candidate.source, candidate.source_host].filter(Boolean).join(" · ") || "-"}</dd>
+        </div>
+        <div>
+          <dt>{t("sourceUrl")}</dt>
+          <dd>
+            {candidate.source_url ? (
+              <a href={candidate.source_url} target="_blank" rel="noreferrer">
+                {candidate.source_url}
+              </a>
+            ) : (
+              "-"
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>{t("pdfUrl")}</dt>
+          <dd>
+            {candidate.pdf_url ? (
+              <a href={candidate.pdf_url} target="_blank" rel="noreferrer">
+                {candidate.pdf_url}
+              </a>
+            ) : (
+              "-"
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>{t("abstract")}</dt>
+          <dd>{candidate.abstract || "-"}</dd>
+        </div>
+        <div>
+          <dt>{t("matchedKeywords")}</dt>
+          <dd>{(candidate.matched_keywords ?? []).join(", ") || "-"}</dd>
+        </div>
+        <div>
+          <dt>{t("emsMatchReason")}</dt>
+          <dd>{candidate.ems_match_reason || "-"}</dd>
+        </div>
+        <div>
+          <dt>{t("matchStatus")}</dt>
+          <dd>{discoveryMatchLabel(candidate.match_status, t)}</dd>
+        </div>
+        <div>
+          <dt>{t("similarity")}</dt>
+          <dd>{candidate.similarity_to_existing ?? "-"}</dd>
+        </div>
+        <div>
+          <dt>{t("matchedExistingThesis")}</dt>
+          <dd>{candidate.matched_existing_running_number ? `#${candidate.matched_existing_running_number}` : "-"}</dd>
+        </div>
+        <div>
+          <dt>{t("relevanceStatus")}</dt>
+          <dd>{reviewStatusLabel(candidate.relevance_status || candidate.review_status, t)}</dd>
+        </div>
+        <div>
+          <dt>{t("createdThesis")}</dt>
+          <dd>{candidate.created_thesis_running_number ? `#${candidate.created_thesis_running_number}` : "-"}</dd>
+        </div>
+      </dl>
+
+      <div className="form-actions">
+        <button
+          className="primary-button"
+          disabled={candidate.match_status === "already_in_database"}
+          onClick={onApprove}
+          type="button"
+        >
+          {t("approve")}
+        </button>
+        <button className="secondary-button" onClick={onNeedsReview} type="button">
+          {t("needsReviewAction")}
+        </button>
+        <button className="secondary-button" onClick={onReject} type="button">
+          {t("reject")}
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function ProfessionSelect({ allowNew, onChange, professions = [], t, value }) {
+  const knownValue = professions.find(
+    (profession) => professionKey(profession) === professionKey(value)
+  );
+  const selectValue = allowNew || (value && !knownValue) ? "__new__" : knownValue || value || "";
+
+  return (
+    <div className="profession-select">
+      <label>
+        <span>{t("profession")}</span>
+        <select
+          value={selectValue}
+          onChange={(event) => {
+            const next = event.target.value;
+            if (next === "__new__") {
+              onChange("", true);
+            } else {
+              onChange(next, false);
+            }
+          }}
+        >
+          <option value="">{t("selectProfession")}</option>
+          {professions.map((profession) => (
+            <option key={profession} value={profession}>
+              {profession}
+            </option>
+          ))}
+          <option value="__new__">{t("addNewProfession")}</option>
+        </select>
+      </label>
+      {(allowNew || (value && !knownValue)) && (
+        <label>
+          <span>{t("newProfession")}</span>
+          <input
+            value={value}
+            onChange={(event) => onChange(event.target.value, true)}
+          />
+        </label>
+      )}
+    </div>
+  );
+}
+
+function ClassificationPage({ t }) {
+  const [reloadKey, setReloadKey] = useState(0);
+  const queueRequest = useApi(`/theses/needs-classification?reload=${reloadKey}`);
+  const optionsRequest = useApi("/classification/options");
+  const professionsRequest = useApi("/professions");
+  const [queue, setQueue] = useState([]);
+  const [form, setForm] = useState({
+    category_id: "",
+    subcategory_id: "",
+    profession: "",
+    allow_new_profession: false,
+  });
+  const [validation, setValidation] = useState("");
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    setQueue(queueRequest.data ?? []);
+    setForm({
+      category_id: "",
+      subcategory_id: "",
+      profession: "",
+      allow_new_profession: false,
+    });
+    setValidation("");
+  }, [queueRequest.data]);
+
+  const thesis = queue[0];
+  const categories = optionsRequest.data ?? [];
+  const selectedCategory = categories.find((category) => category.id === form.category_id);
+  const subcategories = selectedCategory?.subcategories ?? [];
+
+  function updateCategory(categoryId) {
+    setForm({ category_id: categoryId, subcategory_id: "" });
+    setValidation("");
+  }
+
+  function updateSubcategory(subcategoryId) {
+    setForm((current) => ({ ...current, subcategory_id: subcategoryId }));
+    setValidation("");
+  }
+
+  function updateProfession(profession, allowNewProfession) {
+    setForm((current) => ({
+      ...current,
+      profession,
+      allow_new_profession: allowNewProfession,
+    }));
+    setValidation("");
+  }
+
+  async function saveClassification(event) {
+    event.preventDefault();
+    const profession = cleanProfession(form.profession);
+    const isNewProfession =
+      profession &&
+      form.allow_new_profession &&
+      !(professionsRequest.data ?? []).some(
+        (existing) => professionKey(existing) === professionKey(profession)
+      );
+    if (!profession) {
+      setValidation(t("professionRequired"));
+      return;
+    }
+    if (!form.category_id) {
+      setValidation(t("categoryRequired"));
+      return;
+    }
+    if (!form.subcategory_id) {
+      setValidation(t("subcategoryRequired"));
+      return;
+    }
+    if (isNewProfession && !window.confirm(`${t("confirmCreateProfession")} ${form.profession.trim()}`)) {
+      return;
+    }
+
+    setStatus(t("saving"));
+    try {
+      await sendJson(`/theses/${thesis.running_number}/classification`, "PATCH", {
+        ...form,
+        profession,
+      });
+      setStatus(t("classificationSaved"));
+      setQueue((current) => current.slice(1));
+      setForm({
+        category_id: "",
+        subcategory_id: "",
+        profession: "",
+        allow_new_profession: false,
+      });
+      setValidation("");
+      setReloadKey((current) => current + 1);
+    } catch {
+      setStatus(t("classificationSaveFailed"));
+    }
+  }
+
+  return (
+    <section className="page-section classification-page">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">{t("adminMode")}</p>
+          <h1>{t("needsClassification")}</h1>
+        </div>
+        <span className="result-count">{queue.length} {t("results")}</span>
+      </div>
+
+      {(queueRequest.loading || optionsRequest.loading || professionsRequest.loading) && (
+        <Status message={t("loading")} />
+      )}
+      {(queueRequest.error || optionsRequest.error || professionsRequest.error) && (
+        <Status message={t("couldNotLoadData")} />
+      )}
+
+      {!queueRequest.loading && !optionsRequest.loading && !professionsRequest.loading && !thesis && (
+        <p className="placeholder-text">{t("noClassificationQueue")}</p>
+      )}
+
+      {thesis && (
+        <article className="classification-work-item">
+          <div className="candidate-heading">
+            <div>
+              <p className="eyebrow">
+                {t("theses")} #{thesis.running_number}
+              </p>
+              <h2>{thesis.title}</h2>
+              <p className="paper-meta">
+                {[thesis.author, thesis.university, thesis.year, thesis.source]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
+            <span className="metadata-status-badge status-needs_review">
+              {t("needsClassification")}
+            </span>
+          </div>
+
+          <dl className="candidate-detail-list">
+            <div>
+              <dt>{t("title")}</dt>
+              <dd>{thesis.title || "-"}</dd>
+            </div>
+            <div>
+              <dt>{t("author")}</dt>
+              <dd>{thesis.author || "-"}</dd>
+            </div>
+            <div>
+              <dt>{t("university")}</dt>
+              <dd>{thesis.university || "-"}</dd>
+            </div>
+            <div>
+              <dt>{t("year")}</dt>
+              <dd>{thesis.year || "-"}</dd>
+            </div>
+            <div>
+              <dt>{t("source")}</dt>
+              <dd>{thesis.source || "-"}</dd>
+            </div>
+            <div>
+              <dt>{t("dissertationUrl")}</dt>
+              <dd>
+                {thesis.dissertation_url ? (
+                  <a href={thesis.dissertation_url} target="_blank" rel="noreferrer">
+                    {thesis.dissertation_url}
+                  </a>
+                ) : (
+                  "-"
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>{t("abstract")}</dt>
+              <dd>{thesis.abstract || "-"}</dd>
+            </div>
+          </dl>
+
+          <form className="classification-form" onSubmit={saveClassification}>
+            <ProfessionSelect
+              allowNew={form.allow_new_profession}
+              onChange={updateProfession}
+              professions={professionsRequest.data ?? []}
+              t={t}
+              value={form.profession}
+            />
+            <label>
+              <span>{t("category")}</span>
+              <select
+                value={form.category_id}
+                onChange={(event) => updateCategory(event.target.value)}
+              >
+                <option value="">{t("selectCategory")}</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>{t("subcategory")}</span>
+              <select
+                disabled={!form.category_id}
+                value={form.subcategory_id}
+                onChange={(event) => updateSubcategory(event.target.value)}
+              >
+                <option value="">{t("selectSubcategory")}</option>
+                {subcategories.map((subcategory) => (
+                  <option key={subcategory.id} value={subcategory.id}>
+                    {subcategory.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {validation && <p className="validation-message">{validation}</p>}
+            <div className="form-actions">
+              <button className="primary-button" type="submit">
+                {t("saveClassification")}
+              </button>
+              {status && <span className="form-status">{status}</span>}
+            </div>
+          </form>
+        </article>
+      )}
+    </section>
   );
 }
 
@@ -1523,6 +2025,11 @@ function ThesisDetail({ isAdmin, runningNumber, t }) {
 
             {isAdmin && (
               <>
+                <MetadataEditForm
+                  onSaved={setSavedThesis}
+                  t={t}
+                  thesis={thesis}
+                />
                 <IncludedPaperForm
                   onSaved={() => setPaperReload((current) => current + 1)}
                   runningNumber={runningNumber}
@@ -1542,6 +2049,7 @@ function MetadataEditForm({ onSaved, t, thesis }) {
   const [lookupUrl, setLookupUrl] = useState("");
   const [extraction, setExtraction] = useState(null);
   const [status, setStatus] = useState("");
+  const professionsRequest = useApi("/professions");
 
   useEffect(() => {
     setForm(metadataFormFromThesis(thesis));
@@ -1549,9 +2057,27 @@ function MetadataEditForm({ onSaved, t, thesis }) {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    const profession = cleanProfession(form.profession);
+    const isNewProfession =
+      profession &&
+      form.allow_new_profession &&
+      !(professionsRequest.data ?? []).some(
+        (existing) => professionKey(existing) === professionKey(profession)
+      );
+    if (!profession) {
+      setStatus(t("professionRequired"));
+      return;
+    }
+    if (isNewProfession && !window.confirm(`${t("confirmCreateProfession")} ${form.profession.trim()}`)) {
+      return;
+    }
+
     setStatus(t("saving"));
     try {
-      const saved = await sendJson(`/theses/${thesis.running_number}`, "PATCH", form);
+      const saved = await sendJson(`/theses/${thesis.running_number}`, "PATCH", {
+        ...form,
+        profession,
+      });
       onSaved(saved);
       setStatus(t("saved"));
     } catch {
@@ -1611,6 +2137,19 @@ function MetadataEditForm({ onSaved, t, thesis }) {
         />
       )}
       <form className="metadata-edit-fields" onSubmit={handleSubmit}>
+      <ProfessionSelect
+        allowNew={form.allow_new_profession}
+        onChange={(profession, allowNewProfession) =>
+          setForm((current) => ({
+            ...current,
+            profession,
+            allow_new_profession: allowNewProfession,
+          }))
+        }
+        professions={professionsRequest.data ?? []}
+        t={t}
+        value={form.profession}
+      />
       <label>
         <span>{t("abstract")}</span>
         <textarea
@@ -1731,7 +2270,13 @@ function MetadataLookup({ onChecked, onSaved, runningNumber, t }) {
       const result = await sendJson(`/theses/${runningNumber}/lookup-metadata`, "POST", {});
       setLookup(result);
       onChecked(result.candidates.length ? "candidate_found" : "not_found");
-      setStatus(result.candidates.length ? "" : t("noCandidates"));
+      setStatus(
+        result.candidates.length
+          ? ""
+          : result.errors?.length
+            ? t("someRepositorySearchesFailed")
+            : t("noCandidates")
+      );
     } catch {
       setStatus(t("lookupFailed"));
     }
@@ -2043,6 +2588,7 @@ function reviewStatusLabel(status, t) {
     approved: t("approved"),
     rejected: t("rejected"),
     needs_review: t("needsReviewAction"),
+    pending: t("active"),
   };
   return labels[status] ?? status;
 }
@@ -2085,12 +2631,22 @@ function displayMetadataValue(value) {
 
 function metadataFormFromThesis(thesis) {
   return {
+    profession: thesis?.profession ?? "",
+    allow_new_profession: false,
     abstract: thesis?.abstract ?? "",
     dissertation_url: thesis?.dissertation_url ?? "",
     pdf_url: thesis?.pdf_url ?? "",
     doi: thesis?.doi ?? "",
     urn: thesis?.urn ?? "",
   };
+}
+
+function cleanProfession(value) {
+  return String(value ?? "").trim().replace(/\s+/g, " ");
+}
+
+function professionKey(value) {
+  return cleanProfession(value).toLocaleLowerCase("sv-SE");
 }
 
 function emptyPaperForm() {

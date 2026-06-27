@@ -1,19 +1,27 @@
 from datetime import datetime, timezone
+from pathlib import Path
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import distinct, func, text
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.database import Base
 from app.database import engine
+from app.auth import COOKIE_NAME, SiteAuthMiddleware, handle_login, login_page
+from app.config import load_settings
 from app.models import Thesis, Category, Subcategory, IncludedPaper, Reference, DiscoveryCandidate
 from app.providers.common import MetadataError
 from app.services.discovery import (
+    approve_discovery_candidate,
     discover_candidates,
     discovery_summary,
     list_discovery_candidates,
+    mark_discovery_candidate_needs_review,
+    reject_discovery_candidate,
     serialize_discovery_candidate,
 )
 from app.services.metadata_lookup import lookup_metadata_candidates, lookup_metadata_url
@@ -31,9 +39,43 @@ def utcnow():
     return datetime.now(timezone.utc)
 
 
-def ensure_metadata_workflow_columns():
-    Base.metadata.create_all(bind=engine)
-    with engine.begin() as connection:
+def normalize_profession(value):
+    return " ".join(str(value or "").strip().split())
+
+
+def profession_key(value):
+    return normalize_profession(value).casefold()
+
+
+def existing_professions(db: Session) -> list[str]:
+    rows = (
+        db.query(Thesis.profession)
+        .filter(Thesis.profession.isnot(None))
+        .filter(Thesis.profession != "")
+        .distinct()
+        .order_by(Thesis.profession)
+        .all()
+    )
+    return [profession for (profession,) in rows]
+
+
+def resolve_profession(db: Session, value, allow_new=False) -> str:
+    profession = normalize_profession(value)
+    if not profession:
+        raise HTTPException(status_code=400, detail="profession is required")
+
+    for existing in existing_professions(db):
+        if profession_key(existing) == profession_key(profession):
+            return existing
+
+    if allow_new:
+        return profession
+    raise HTTPException(status_code=400, detail="Unknown profession")
+
+
+def ensure_metadata_workflow_columns(bind=engine):
+    Base.metadata.create_all(bind=bind)
+    with bind.begin() as connection:
         thesis_columns = {
             row[1] for row in connection.execute(text("PRAGMA table_info(theses)")).fetchall()
         }
@@ -48,6 +90,17 @@ def ensure_metadata_workflow_columns():
             connection.execute(
                 text("ALTER TABLE theses ADD COLUMN metadata_last_checked_at DATETIME")
             )
+        if "classification_status" not in thesis_columns:
+            connection.execute(
+                text("ALTER TABLE theses ADD COLUMN classification_status VARCHAR")
+            )
+            connection.execute(
+                text(
+                    "UPDATE theses "
+                    "SET classification_status = 'classified' "
+                    "WHERE category_id IS NOT NULL AND subcategory_id IS NOT NULL"
+                )
+            )
         discovery_columns = {
             row[1] for row in connection.execute(text("PRAGMA table_info(discovery_candidates)")).fetchall()
         }
@@ -55,6 +108,26 @@ def ensure_metadata_workflow_columns():
             connection.execute(text("ALTER TABLE discovery_candidates ADD COLUMN source_host VARCHAR"))
         if "publication_type" not in discovery_columns:
             connection.execute(text("ALTER TABLE discovery_candidates ADD COLUMN publication_type VARCHAR"))
+        if "relevance_status" not in discovery_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE discovery_candidates ADD COLUMN relevance_status "
+                    "VARCHAR NOT NULL DEFAULT 'pending'"
+                )
+            )
+            connection.execute(
+                text(
+                    "UPDATE discovery_candidates "
+                    "SET relevance_status = review_status "
+                    "WHERE review_status IN ('approved', 'rejected', 'needs_review')"
+                )
+            )
+        if "created_thesis_id" not in discovery_columns:
+            connection.execute(text("ALTER TABLE discovery_candidates ADD COLUMN created_thesis_id INTEGER"))
+        if "created_thesis_running_number" not in discovery_columns:
+            connection.execute(
+                text("ALTER TABLE discovery_candidates ADD COLUMN created_thesis_running_number INTEGER")
+            )
 
 
 ensure_metadata_workflow_columns()
@@ -93,10 +166,33 @@ def root():
     return {"status": "running"}
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 @app.get("/theses")
 def get_theses(db: Session = Depends(get_db)):
     theses = db.query(Thesis).order_by(Thesis.year.desc(), Thesis.running_number.desc()).all()
     return theses
+
+
+@app.get("/theses/needs-classification")
+def get_theses_needing_classification(db: Session = Depends(get_db)):
+    theses = (
+        db.query(Thesis)
+        .filter(Thesis.classification_status == "needs_classification")
+        .filter(Thesis.category_id.is_(None))
+        .filter(Thesis.subcategory_id.is_(None))
+        .order_by(Thesis.running_number)
+        .all()
+    )
+    return [serialize_thesis(thesis) for thesis in theses]
+
+
+@app.get("/professions")
+def get_professions(db: Session = Depends(get_db)):
+    return existing_professions(db)
 
 
 @app.get("/theses/{running_number}")
@@ -118,6 +214,13 @@ def update_thesis_metadata(
     thesis = get_thesis_or_404(running_number, db)
     allowed_fields = {"abstract", "dissertation_url", "pdf_url", "doi", "urn"}
 
+    if "profession" in metadata:
+        thesis.profession = resolve_profession(
+            db,
+            metadata.get("profession"),
+            allow_new=bool(metadata.get("allow_new_profession")),
+        )
+
     for field in allowed_fields:
         if field in metadata:
             value = metadata[field]
@@ -131,10 +234,67 @@ def update_thesis_metadata(
     return serialize_thesis(thesis)
 
 
+@app.patch("/theses/{running_number}/classification")
+def classify_thesis(
+    running_number: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    category_id = (payload.get("category_id") or "").strip()
+    subcategory_id = (payload.get("subcategory_id") or "").strip()
+    profession = resolve_profession(
+        db,
+        payload.get("profession"),
+        allow_new=bool(payload.get("allow_new_profession")),
+    )
+    if not category_id:
+        raise HTTPException(status_code=400, detail="category_id is required")
+    if not subcategory_id:
+        raise HTTPException(status_code=400, detail="subcategory_id is required")
+
+    thesis = get_thesis_or_404(running_number, db)
+    category = db.get(Category, category_id)
+    subcategory = db.get(Subcategory, subcategory_id)
+    if category is None:
+        raise HTTPException(status_code=400, detail="Unknown category_id")
+    if subcategory is None:
+        raise HTTPException(status_code=400, detail="Unknown subcategory_id")
+    if subcategory.category_id != category.id:
+        raise HTTPException(
+            status_code=400,
+            detail="subcategory_id does not belong to category_id",
+        )
+
+    thesis.category_id = category.id
+    thesis.subcategory_id = subcategory.id
+    thesis.profession = profession
+    thesis.classification_status = "classified"
+    db.commit()
+    db.refresh(thesis)
+    return serialize_thesis(thesis)
+
+
 @app.post("/theses/{running_number}/lookup-metadata")
 def lookup_thesis_metadata(running_number: int, db: Session = Depends(get_db)):
     thesis = get_thesis_or_404(running_number, db)
-    result = lookup_metadata_candidates(thesis)
+    try:
+        result = lookup_metadata_candidates(thesis)
+    except Exception as exc:  # Metadata lookup should not break the review workflow.
+        result = {
+            "search": {
+                "title": thesis.title,
+                "author": thesis.author,
+                "university": thesis.university,
+                "year": thesis.year,
+            },
+            "candidates": [],
+            "errors": [{"source": "metadata_lookup", "error": str(exc)}],
+            "error_summary": {
+                "message": "Metadata lookup failed",
+                "count": 1,
+                "details": [{"source": "metadata_lookup", "error": str(exc)}],
+            },
+        }
     thesis.metadata_last_checked_at = utcnow()
     thesis.metadata_status = "candidate_found" if result["candidates"] else "not_found"
     db.commit()
@@ -183,6 +343,7 @@ def get_discovery_summary(db: Session = Depends(get_db)):
 def get_discovery_candidates(
     match_status: str | None = None,
     review_status: str | None = None,
+    status_filter: str = "active",
     include_known: bool = False,
     db: Session = Depends(get_db),
 ):
@@ -191,6 +352,7 @@ def get_discovery_candidates(
         {
             "match_status": match_status,
             "review_status": review_status,
+            "status_filter": status_filter,
             "include_known": include_known,
         },
     )
@@ -206,13 +368,21 @@ def update_discovery_candidate(candidate_id: int, payload: dict, db: Session = D
     candidate = db.query(DiscoveryCandidate).filter(DiscoveryCandidate.id == candidate_id).first()
     if candidate is None:
         raise HTTPException(status_code=404, detail="Discovery candidate not found")
-    if review_status == "approved" and candidate.match_status == "already_in_database":
-        raise HTTPException(status_code=400, detail="Known database matches cannot be approved as missing theses")
 
-    candidate.review_status = review_status
-    candidate.updated_at = utcnow()
-    db.commit()
-    db.refresh(candidate)
+    try:
+        if review_status == "approved":
+            candidate = approve_discovery_candidate(
+                db,
+                candidate,
+                confirm_duplicate=bool(payload.get("confirm_duplicate")),
+            )
+        elif review_status == "rejected":
+            candidate = reject_discovery_candidate(db, candidate)
+        else:
+            candidate = mark_discovery_candidate_needs_review(db, candidate)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     return serialize_discovery_candidate(candidate)
 
 
@@ -306,6 +476,7 @@ def serialize_thesis(thesis: Thesis):
         "degree_type": thesis.degree_type,
         "category_id": thesis.category_id,
         "subcategory_id": thesis.subcategory_id,
+        "classification_status": thesis.classification_status,
         "source": thesis.source,
         "abstract": thesis.abstract,
         "dissertation_url": thesis.dissertation_url,
@@ -431,6 +602,26 @@ def get_research_area(category_id: str, db: Session = Depends(get_db)):
     return serialize_research_area(category, db)
 
 
+@app.get("/classification/options")
+def get_classification_options(db: Session = Depends(get_db)):
+    categories = db.query(Category).order_by(Category.id).all()
+    return [
+        {
+            "id": category.id,
+            "name": category.name,
+            "subcategories": [
+                {
+                    "id": subcategory.id,
+                    "name": subcategory.name,
+                    "category_id": subcategory.category_id,
+                }
+                for subcategory in sorted(category.subcategories, key=lambda item: item.id)
+            ],
+        }
+        for category in categories
+    ]
+
+
 @app.get("/categories")
 def get_categories(db: Session = Depends(get_db)):
     categories = db.query(Category).order_by(Category.id).all()
@@ -441,3 +632,58 @@ def get_categories(db: Session = Depends(get_db)):
 def get_subcategories(db: Session = Depends(get_db)):
     subcategories = db.query(Subcategory).order_by(Subcategory.id).all()
     return subcategories
+
+
+# The existing application remains the API implementation. A small outer app
+# owns authentication and the production SPA, keeping every API route under
+# one unambiguous prefix.
+api_app = app
+STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
+
+
+def create_application(api_application, app_settings, static_dir: Path = STATIC_DIR):
+    application = FastAPI(
+        title="Prehospitala Avhandlingar",
+        version="0.1.0",
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
+    application.state.settings = app_settings
+    application.add_middleware(SiteAuthMiddleware, settings=app_settings)
+    application.mount("/api", api_application)
+
+    @application.get("/login")
+    def get_login():
+        return login_page()
+
+    @application.post("/login")
+    async def post_login(request: Request):
+        return await handle_login(request, app_settings)
+
+    @application.post("/logout")
+    def logout():
+        response = RedirectResponse("/login", status_code=303)
+        response.delete_cookie(COOKIE_NAME, path="/")
+        return response
+
+    index_path = static_dir / "index.html"
+    assets_dir = static_dir / "assets"
+    if assets_dir.is_dir():
+        application.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @application.get("/{full_path:path}")
+    def frontend(full_path: str):
+        if static_dir.is_dir() and full_path:
+            requested = (static_dir / full_path).resolve()
+            if requested.is_relative_to(static_dir.resolve()) and requested.is_file():
+                return FileResponse(requested)
+        if index_path.is_file():
+            return FileResponse(index_path)
+        return {"status": "running", "frontend": "Use the Vite development server locally"}
+
+    return application
+
+
+settings = load_settings()
+app = create_application(api_app, settings)

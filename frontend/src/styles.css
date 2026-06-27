@@ -233,7 +233,7 @@ a:hover {
 .panel-scroll {
   display: flex;
   flex-direction: column;
-  height: 430px;
+  height: 629px;
 }
 
 .rank-list {
@@ -245,6 +245,8 @@ a:hover {
 }
 
 .panel-scroll .rank-list {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 8px;
 }
@@ -678,6 +680,7 @@ a:hover {
 }
 
 .metadata-form input,
+.metadata-form select,
 .metadata-form textarea,
 .discovery-controls input,
 .discovery-controls select,
@@ -794,6 +797,76 @@ a:hover {
   padding: 16px;
 }
 
+.candidate-review-panel {
+  background: #ffffff;
+  border: 1px solid #b7c4d8;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  margin: 16px 0;
+  padding: 18px;
+}
+
+.classification-work-item {
+  background: #ffffff;
+  border: 1px solid #ddd8ce;
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.classification-form {
+  border-top: 1px solid #ddd8ce;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-top: 16px;
+}
+
+.classification-form label {
+  color: #475467;
+  display: grid;
+  font-size: 0.9rem;
+  gap: 6px;
+}
+
+.profession-select {
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.classification-form select {
+  background: #ffffff;
+  border: 1px solid #cfc7ba;
+  border-radius: 6px;
+  color: #1f2933;
+  font: inherit;
+  min-width: 0;
+  padding: 9px 10px;
+}
+
+.classification-form select:disabled {
+  background: #f3f0ea;
+  color: #697586;
+}
+
+.classification-form .form-actions,
+.classification-form .validation-message {
+  grid-column: 1 / -1;
+}
+
+.validation-message {
+  background: #fff8e8;
+  border: 1px solid #e4c77f;
+  border-radius: 6px;
+  color: #6f3d2e;
+  margin: 0;
+  padding: 8px 10px;
+}
+
 .discovery-controls,
 .discovery-filters {
   background: #ffffff;
@@ -812,6 +885,30 @@ a:hover {
 .discovery-filters {
   align-items: end;
   grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+}
+
+.discovery-tabs {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.discovery-tabs button {
+  background: #ffffff;
+  border: 1px solid #cfc7ba;
+  border-radius: 6px;
+  color: #344054;
+  cursor: pointer;
+  font: inherit;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.discovery-tabs button.active,
+.discovery-tabs button:hover {
+  background: #1f2933;
+  border-color: #1f2933;
+  color: #ffffff;
 }
 
 .discovery-dashboard {
@@ -1002,7 +1099,9 @@ a:hover {
   .lookup-url-form,
   .metadata-comparison,
   .discovery-controls,
-  .discovery-filters {
+  .discovery-filters,
+  .classification-form,
+  .profession-select {
     grid-template-columns: 1fr;
   }
 

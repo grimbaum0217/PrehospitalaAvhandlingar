@@ -51,15 +51,16 @@ def find_dissertation_urls(html: str) -> list[str]:
 def record_candidate(record_url: str, query: SearchQuery) -> dict:
     html = fetch_text(record_url)
     meta = extract_meta(html).meta
-    page_title = clean_text(meta.get("og:title") or meta.get("title") or "")
+    page_title = clean_text(meta.get("og:title") or meta.get("title") or extract_heading_title(html) or "")
     title, author = split_title_author(page_title)
+    page_author, page_university = extract_author_university(html)
 
     candidate = normalize_candidate(
         {
             "title": title,
-            "author": author,
-            "university": extract_labeled_value(html, ["University", "Universitet"]),
-            "year": extract_year(html),
+            "author": author or page_author,
+            "university": extract_labeled_value(html, ["University", "Universitet"]) or page_university,
+            "year": extract_year(html, meta),
             "dissertation_url": extract_repository_url(html) or record_url,
             "pdf_url": extract_pdf_url(html),
             "doi": find_doi(html),
@@ -69,6 +70,7 @@ def record_candidate(record_url: str, query: SearchQuery) -> dict:
     )
     candidate["source_url"] = candidate.get("dissertation_url")
     candidate["source_host"] = source_host(candidate.get("dissertation_url"))
+    candidate["keywords"] = extract_keywords(html)
     candidate["confidence"] = round(score_candidate(candidate, query), 3)
     return candidate
 
@@ -83,6 +85,41 @@ def split_title_author(page_title: str) -> tuple[str | None, str | None]:
     return page_title or None, None
 
 
+def extract_heading_title(html: str) -> str | None:
+    match = re.search(r"<h1[^>]*>(.*?)</h1>", html, flags=re.I | re.S)
+    return strip_tags(match.group(1)) if match else None
+
+
+def extract_author_university(html: str) -> tuple[str | None, str | None]:
+    match = re.search(r"Författare:\s*(.*?)(?:Nyckelord:|Sammanfattning:)", html, flags=re.I | re.S)
+    if not match:
+        return None, None
+    parts = [
+        strip_tags(part)
+        for part in re.split(r"\s*;\s*", match.group(1))
+        if strip_tags(part) and strip_tags(part) != "[]"
+    ]
+    author = parts[0] if parts else None
+    university = parts[1] if len(parts) > 1 else None
+    return author, university
+
+
+def extract_keywords(html: str) -> str | None:
+    match = re.search(r"Nyckelord:\s*(.*?)(?:Sammanfattning:|<h\d|</body>)", html, flags=re.I | re.S)
+    if not match:
+        return None
+    keywords = [
+        strip_tags(part)
+        for part in re.split(r"\s*;\s*", match.group(1))
+        if strip_tags(part)
+    ]
+    return ", ".join(keywords) or None
+
+
+def strip_tags(html: str) -> str:
+    return clean_text(re.sub(r"<[^>]+>", " ", html))
+
+
 def extract_labeled_value(html: str, labels: list[str]) -> str | None:
     for label in labels:
         pattern = rf"{re.escape(label)}\s*:?\s*</[^>]+>\s*<[^>]+>([^<]+)"
@@ -92,8 +129,16 @@ def extract_labeled_value(html: str, labels: list[str]) -> str | None:
     return None
 
 
-def extract_year(html: str) -> int | None:
-    return normalize_year(extract_labeled_value(html, ["Year", "År"]) or html)
+def extract_year(html: str, meta: dict[str, str] | None = None) -> int | None:
+    meta = meta or {}
+    metadata_year = (
+        meta.get("citation_publication_date")
+        or meta.get("DC.date")
+        or meta.get("DC.Date")
+        or meta.get("dc.date")
+        or meta.get("article:published_time")
+    )
+    return normalize_year(metadata_year or extract_labeled_value(html, ["Year", "År"]) or html)
 
 
 def extract_pdf_url(html: str) -> str | None:

@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 .env
+.env.*
+!.env.example
 data/raw/*
 data/processed/*
 .DS_Store
@@ -14,3 +16,7 @@ backend/data/*.db
 backend/data/*.db-journal
 backend/data/*.sqlite
 backend/data/*.sqlite3
+backend/data/*.backup-*
+!backend/data/app.db
+backend/static/
+/data/app.db

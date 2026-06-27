@@ -40,6 +40,7 @@ class Thesis(Base):
 
     category_id = Column(String)
     subcategory_id = Column(String, ForeignKey("subcategories.id"))
+    classification_status = Column(String)
 
     source = Column(String)
     abstract = Column(Text)
@@ -93,6 +94,9 @@ class DiscoveryCandidate(Base):
     matched_existing_thesis_id = Column(Integer)
     matched_existing_running_number = Column(Integer)
     review_status = Column(String, default="needs_review", nullable=False)
+    relevance_status = Column(String, default="pending", nullable=False)
+    created_thesis_id = Column(Integer)
+    created_thesis_running_number = Column(Integer)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
 
